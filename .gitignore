@@ -1,0 +1,10 @@
+Manifest.toml
+.warp/
+# Compiled artifacts from deps/
+deps/flootySpawnHelper
+deps/libflootyShim.dylib
+deps/*.o
+# Coverage
+*.jl.cov
+*.jl.*.cov
+**/.warp/
