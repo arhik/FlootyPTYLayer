@@ -972,6 +972,8 @@ const BROWSER_NAV_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 # Separate controller for the AMBIENT MONITOR's model: the monitor is a different
 # workload (short, frequent, cheap) and deserves its own choice.
 const AGENT_MONITOR_SELECTOR = Ref{Union{Nothing,Function}}(nothing)
+# The prompt-state DECISION model is a third, independent choice.
+const AGENT_DECISION_SELECTOR = Ref{Union{Nothing,Function}}(nothing)
 
 "Install the provider of the app's root chat session id."
 function addChatSessionProvider!(f::Function)
@@ -1016,21 +1018,25 @@ function addBrowserNavigateHandler!(f::Function)
 end
 
 """
-    addAgentModelHooks!(provider::Function, selector::Function)
+    addAgentModelHooks!(provider, selector, monitorSelector = nothing,
+                        decisionSelector = nothing)
 
 Register the agent's model controller:
 
-* `provider()` → `(; current::String, available::Vector{String})`: the model in
-  force and the models the endpoint offers;
-* `selector(name::String)` → the same pair AFTER applying the choice.
+* `provider()` → `(; current, monitor, decision, available, decision_models)`;
+* `selector(name, session_id)` → the same state AFTER applying the driver choice;
+* `monitorSelector` and `decisionSelector` apply the monitor and decision choices
+  independently.
 
-Both may fail; the UI degrades to "no picker" rather than breaking the window.
+All may fail; the UI degrades to "no picker" rather than breaking the window.
 """
 function addAgentModelHooks!(provider::Function, selector::Function,
-                             monitorSelector::Union{Nothing,Function} = nothing)
+                             monitorSelector::Union{Nothing,Function} = nothing,
+                             decisionSelector::Union{Nothing,Function} = nothing)
     AGENT_MODEL_PROVIDER[] = provider
     AGENT_MODEL_SELECTOR[] = selector
     monitorSelector === nothing || (AGENT_MONITOR_SELECTOR[] = monitorSelector)
+    decisionSelector === nothing || (AGENT_DECISION_SELECTOR[] = decisionSelector)
     return nothing
 end
 
@@ -1041,25 +1047,53 @@ terminal id, which is how per-tab models reach the picker.
 """
 function agentModelState(session_id::AbstractString = "")
     provider = AGENT_MODEL_PROVIDER[]
-    provider === nothing && return (current = "", monitor = "", available = String[])
+    provider === nothing &&
+        return (current = "", monitor = "", decision = "", available = String[],
+                decision_models = String[], speech_models = String[])
     try
         state = Base.invokelatest(provider, String(session_id))
         return (current = String(state.current),
-                monitor = String(get(state, :monitor, state.current)),
-                available = String[String(x) for x in state.available])
+                monitor = String(get(state, :monitor, "")),
+                decision = String(get(state, :decision, "")),
+                available = String[String(x) for x in state.available],
+                decision_models = String[String(x) for x in get(state, :decision_models, String[])],
+                speech_models = String[String(x) for x in get(state, :speech_models, String[])],
+                providers = get(state, :providers, nothing))
     catch err
         @debug "flootyWebUi: agent model provider failed" exception = err
-        return (current = "", monitor = "", available = String[])
+        return (current = "", monitor = "", decision = "", available = String[],
+                decision_models = String[], speech_models = String[])
     end
 end
 
-"JSON reply for the picker: the model in force and the ones on offer."
+_modelListJson(models) = join(["\"$(escapeJsString(String(name)))\"" for name in models], ",")
+
+"JSON reply for the picker: the models in force and the ones on offer."
 function jsonAgentModelState(state)::String
-    options = join(["\"$(escapeJsString(String(name)))\"" for name in state.available], ",")
-    monitor = get(state, :monitor, state.current)
+    options = _modelListJson(state.available)
+    monitor = get(state, :monitor, "")
+    decision = get(state, :decision, "")
+    decisions = _modelListJson(get(state, :decision_models, String[]))
+    speeches = _modelListJson(get(state, :speech_models, String[]))
+    progs = _providerGroupJson(get(state, :providers, nothing))
     return "{\"success\":true,\"current\":\"" * escapeJsString(String(state.current)) *
            "\",\"monitor\":\"" * escapeJsString(String(monitor)) *
-           "\",\"available\":[" * options * "]}"
+           "\",\"decision\":\"" * escapeJsString(String(decision)) *
+           "\",\"available\":[" * options * "]" *
+           ",\"decision_models\":[" * decisions * "]" *
+           ",\"speech_models\":[" * speeches * "]" * progs * "}"
+end
+
+# Serialise provider groups as `,"providers":[{name,models},...]` (empty tail when none).
+function _providerGroupJson(groups)::String
+    groups === nothing && return ""
+    isempty(groups) && return ""
+    parts = String[]
+    for g in groups
+        models = join(["\"$(escapeJsString(String(m)))\"" for m in g.models], ",")
+        push!(parts, "{\"name\":\"" * escapeJsString(String(g.name)) * "\",\"models\":[" * models * "]}")
+    end
+    return ",\"providers\":[" * join(parts, ",") * "]"
 end
 
 # ---- copy: the app owns it, because WebKit's does nothing here ----------------
@@ -3587,6 +3621,25 @@ function registerTerminalBindings!(wv)
         resp
     end
 
+    Webviews.bind(wv, "flootySetDecisionModel") do args
+        resp = try
+            payload = jsonArgs(args)
+            name = jsonStr(payload, :model)
+            tid = jsonStr(payload, :terminal_id)
+            selector = AGENT_DECISION_SELECTOR[]
+            if selector === nothing
+                errorJson("no agent decision controller installed")
+            else
+                state = Base.invokelatest(selector, String(name), String(tid))
+                jsonAgentModelState(state)
+            end
+        catch err
+            @error "flootyWebUi: flootySetDecisionModel failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
     Webviews.bind(wv, "flootyNewChildChat") do args
         resp = try
             payload = jsonArgs(args)
@@ -3676,8 +3729,7 @@ function registerTerminalBindings!(wv)
                 errorJson("no agent model controller installed")
             else
                 state = Base.invokelatest(selector, String(name), String(tid))
-                jsonAgentModelState((current = String(state.current),
-                                     available = String[String(x) for x in state.available]))
+                jsonAgentModelState(state)
             end
         catch err
             @error "flootyWebUi: flootySetModel failed" exception = err

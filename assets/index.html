@@ -1547,6 +1547,9 @@
                 <select id="monitorSelect" class="status-select"
                         title="Model for this tab's AMBIENT MONITOR (watches and comments).">
                 </select>
+                <select id="decisionSelect" class="status-select"
+                        title="Model for this tab's prompt-state DECISIONS (separate from the driver and monitor).">
+                </select>
             </div>
             <button id="splitBtn" title="Split the pane: Alt+D vertical (side by side), Alt+Shift+D horizontal (stacked)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">split</button>
@@ -4319,15 +4322,30 @@
         // The list comes from Julia (the agent package owns the endpoint), so the
         // page never talks to the API itself. The real contract is "applies to the
         // NEXT run": an agent already working keeps the model it started with.
-        let agentModels = { current: '', monitor: '', available: [] };
+        let agentModels = { current: '', monitor: '', decision: '',
+                            available: [], decision_models: [],
+                            speech_models: [], providers: [] };
         let agentModelGen = 0;      // bumped by every user choice
         const modelSelect = document.getElementById('modelSelect');
         const monitorSelect = document.getElementById('monitorSelect');
+        const decisionSelect = document.getElementById('decisionSelect');
 
-        function fillModelSelect(el, current, available, emptyLabel) {
+        // A raw /v1/models id (no provider prefix) and its grouped provider
+        // id refer to the same model. Compare the ids after removing the
+        // routing prefix so the picker can select the grouped form.
+        function stripModelProviderPrefix(name) {
+            return String(name || '').replace(/^(llamacpp|chutes|ollama|ssh|sshhub):/, '');
+        }
+        function sameModelName(a, b) {
+            if (!a || !b) return false;
+            return a === b || stripModelProviderPrefix(a) === stripModelProviderPrefix(b);
+        }
+
+        function fillModelSelect(el, current, available, emptyLabel, providers,
+                                 allowFirst = true) {
             if (!el) return;
             while (el.firstChild) el.removeChild(el.firstChild);
-            if (!available.length) {
+            if (!available.length && !(providers && providers.length) && !current) {
                 const opt = document.createElement('option');
                 opt.textContent = emptyLabel;
                 el.appendChild(opt);
@@ -4337,24 +4355,80 @@
             }
             el.classList.remove('empty');
             el.disabled = false;
-            for (const name of available) {
-                const opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name;
-                if (name === current) opt.selected = true;
-                el.appendChild(opt);
+            let selectedCurrent = false;
+            // When providers are known, group models under <optgroup> labels;
+            // otherwise flat <option> rendering preserves backward compatibility.
+            if (providers && providers.length) {
+                for (const grp of providers) {
+                    const label = grp.name || '';
+                    const models = grp.models || [];
+                    const og = document.createElement('optgroup');
+                    og.label = label;
+                    for (const name of models) {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        if (sameModelName(name, current)) {
+                            opt.selected = true;
+                            selectedCurrent = true;
+                        }
+                        og.appendChild(opt);
+                    }
+                    el.appendChild(og);
+                }
+            } else {
+                for (const name of available) {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name;
+                    if (sameModelName(name, current)) {
+                        opt.selected = true;
+                        selectedCurrent = true;
+                    }
+                    el.appendChild(opt);
+                }
             }
-            if (!el.value) el.value = available[0];
+            // If neither list carries the active id, keep it visible rather
+            // than silently displaying (and later switching to) the first
+            // option. This happens in the brief window before provider groups
+            // replace the flat /v1/models fallback.
+            if (!selectedCurrent && current) {
+                const opt = document.createElement('option');
+                opt.value = current;
+                opt.textContent = current;
+                opt.selected = true;
+                el.appendChild(opt);
+                selectedCurrent = true;
+            }
+            // A control with no explicit current value (e.g. Monitor/Decision
+            // before one is chosen) must show an empty choice, never inherit the
+            // driver's model. The driver keeps its first-option fallback for the
+            // brief window before the current id is known.
+            if (!selectedCurrent && !allowFirst) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = emptyLabel;
+                opt.selected = true;
+                el.appendChild(opt);
+                selectedCurrent = true;
+            }
+            if (!selectedCurrent && allowFirst && available.length) el.value = available[0];
         }
 
         function renderModelSelect() {
             fillModelSelect(modelSelect, agentModels.current,
-                            agentModels.available, 'no models');
-            fillModelSelect(monitorSelect, agentModels.monitor || agentModels.current,
-                            agentModels.available, 'no models');
+                            agentModels.available, 'no models',
+                            agentModels.providers);
+            fillModelSelect(monitorSelect, agentModels.monitor,
+                            agentModels.available, 'no monitor model',
+                            agentModels.providers, false);
+            fillModelSelect(decisionSelect, agentModels.decision,
+                            agentModels.decision_models, 'no decision model',
+                            null, false);
         }
 
         let modelFetchRetries = 0;
+        let modelMenuOpen = false;
         async function refreshAgentModels() {
             const gen = agentModelGen;
             const active = terminals[activeTerminalId];
@@ -4362,14 +4436,24 @@
             try {
                 const state = await callJulia('flootyModels',
                                               JSON.stringify({ terminal_id: tid }));
-                if (gen !== agentModelGen) return;   // a choice superseded this read
+                const still = terminals[activeTerminalId];
+                const stillId = still ? (still.juliaId || '') : '';
+                if (gen !== agentModelGen || stillId !== tid) return;
                 if (state && state.success) {
                     agentModels = { current: state.current || '',
                                     monitor: state.monitor || '',
-                                    available: state.available || [] };
+                                    decision: state.decision || '',
+                                    available: state.available || [],
+                                    decision_models: state.decision_models || [],
+                                    speech_models: state.speech_models || [],
+                                    providers: state.providers || [] };
                     const tabNow = terminals[activeTerminalId];
                     if (tabNow) tabNow.model = agentModels.current;   // per-tab memory
-                    renderModelSelect();
+                    // Never rebuild an open native <select> popup: the click
+                    // that opened it fires mousedown, and replacing its options
+                    // mid-menu can swallow the choice. The change/blur handlers
+                    // repaint from the fresh state instead.
+                    if (!modelMenuOpen) renderModelSelect();
                     // The backend refreshes the endpoint's list in the BACKGROUND
                     // (a binding must never block on HTTP), so the first answer
                     // can be empty: ask again shortly instead of showing a dead
@@ -4385,7 +4469,13 @@
         }
 
         if (modelSelect) {
+            modelSelect.addEventListener('mousedown', () => { modelMenuOpen = true; });
+            modelSelect.addEventListener('blur', () => {
+                modelMenuOpen = false;
+                renderModelSelect();
+            });
             modelSelect.addEventListener('change', async () => {
+                modelMenuOpen = false;
                 const want = modelSelect.value;
                 agentModelGen++;                     // our choice wins over in-flight reads
                 let state = null;
@@ -4395,9 +4485,26 @@
                                             JSON.stringify({ model: want,
                                                 terminal_id: activeNow ? (activeNow.juliaId || '') : '' }));
                 } catch (e) { state = null; }
+                // Invalidate any read that began while the set was in flight:
+                // its answer predates this choice and would otherwise paint the
+                // old model back into the picker.
+                agentModelGen++;
                 agentModels = (state && state.success) ?
-                    { current: state.current || want, available: state.available || [] } :
-                    { current: want, available: agentModels.available };
+                    { current: state.current || want,
+                      monitor: state.monitor || agentModels.monitor,
+                      decision: state.decision || agentModels.decision,
+                      available: state.available || [],
+                      decision_models: state.decision_models || agentModels.decision_models,
+                      speech_models: state.speech_models || agentModels.speech_models,
+                      providers: state.providers || agentModels.providers } :
+                    { current: want, monitor: agentModels.monitor,
+                      decision: agentModels.decision,
+                      available: agentModels.available,
+                      decision_models: agentModels.decision_models,
+                      speech_models: agentModels.speech_models,
+                      providers: agentModels.providers };
+                const tabNow = terminals[activeTerminalId];
+                if (tabNow) tabNow.model = agentModels.current;
                 renderModelSelect();
                 try { window.flootyDebug && window.flootyDebug(
                     'modelSelect -> ' + agentModels.current); } catch (e) {}
@@ -4415,7 +4522,11 @@
                     if (state && state.success) {
                         agentModels = { current: state.current || agentModels.current,
                                         monitor: state.monitor || want,
-                                        available: state.available || agentModels.available };
+                                        decision: state.decision || agentModels.decision,
+                                        available: state.available || agentModels.available,
+                                        decision_models: state.decision_models || agentModels.decision_models,
+                                        speech_models: state.speech_models || agentModels.speech_models,
+                                        providers: state.providers || agentModels.providers };
                     } else {
                         agentModels.monitor = want;
                     }
@@ -4423,7 +4534,51 @@
                     try { window.flootyDebug && window.flootyDebug(
                         'monitorSelect -> ' + agentModels.monitor); } catch (e) {}
                 });
-                monitorSelect.addEventListener('mousedown', refreshAgentModels);
+                monitorSelect.addEventListener('mousedown', () => {
+                    modelMenuOpen = true;
+                    refreshAgentModels();
+                });
+                monitorSelect.addEventListener('blur', () => {
+                    modelMenuOpen = false;
+                    renderModelSelect();
+                });
+            }
+            if (decisionSelect) {
+                decisionSelect.addEventListener('change', async () => {
+                    modelMenuOpen = false;
+                    const want = decisionSelect.value;
+                    agentModelGen++;
+                    const activeNow = terminals[activeTerminalId];
+                    let state = null;
+                    try {
+                        state = await callJulia('flootySetDecisionModel',
+                                                JSON.stringify({ model: want,
+                            terminal_id: activeNow ? (activeNow.juliaId || '') : '' }));
+                    } catch (e) { state = null; }
+                    agentModelGen++;
+                    if (state && state.success) {
+                        agentModels = { current: state.current || agentModels.current,
+                                        monitor: state.monitor || agentModels.monitor,
+                                        decision: state.decision !== undefined ? state.decision : want,
+                                        available: state.available || agentModels.available,
+                                        decision_models: state.decision_models || agentModels.decision_models,
+                                        speech_models: state.speech_models || agentModels.speech_models,
+                                        providers: state.providers || agentModels.providers };
+                    } else {
+                        agentModels.decision = want;
+                    }
+                    renderModelSelect();
+                    try { window.flootyDebug && window.flootyDebug(
+                        'decisionSelect -> ' + agentModels.decision); } catch (e) {}
+                });
+                decisionSelect.addEventListener('mousedown', () => {
+                    modelMenuOpen = true;
+                    refreshAgentModels();
+                });
+                decisionSelect.addEventListener('blur', () => {
+                    modelMenuOpen = false;
+                    renderModelSelect();
+                });
             }
             // No polling: refresh when the user reaches for the control.
             modelSelect.addEventListener('mousedown', refreshAgentModels);
