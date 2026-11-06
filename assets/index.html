@@ -2050,7 +2050,9 @@
             const ws = document.querySelector('.workspace');
             if (!ws) return;
             const hasTerminal = Object.keys(terminals).length > 0;
-            const hasChat = Object.keys(chatTabs).length > 0;
+            // The root chat tab is CHAT_ONLY itself. With no terminal it is the
+            // chat-only surface, not a split-pane chat session.
+            const hasChat = Object.keys(chatTabs).some(id => id !== CHAT_SESSION_ID);
             const hasBrowser = Object.keys(browserTabs).length > 0;
             ws.classList.toggle('chat-only', !hasTerminal && !hasChat && !hasBrowser);
             if (typeof forceFitActive === 'function') {
