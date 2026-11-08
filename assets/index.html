@@ -3243,7 +3243,9 @@
             const coalesce = role !== 'monitorThinking';
             if (coalesce && last && last.role === role &&
                 (now - last.at) < CHAT_COALESCE_MS) {
-                last.text += '\n' + body;   // streamed continuation of one message
+                // Streamed thinking arrives as token fragments, so append it verbatim. Complete text/assistant thoughts stay on their own lines.
+                const join = role === 'thinking' ? '' : '\n';
+                last.text += join + body;   // streamed continuation of one message
                 last.at = now;
             } else {
                 chat.push({ role: role, text: body, at: now });
@@ -3690,16 +3692,26 @@
         // was already at the bottom (normal chat behavior).
         let chatRenderedFor = null;
         let chatRendering = false;
-
+        let chatRenderScheduled = false;
+        let chatRenderTimer = 0;
+        const CHAT_RENDER_MS = 50;
+        const MD_RENDER_MS = 150;
+        // Coalesce renders to at most one DOM rebuild per 50ms. The agent
+        // streams thinking tokens one at a time; rendering the full transcript
+        // per token blocked the key handler and the xterm itself.
         function renderActiveAgentChat() {
-            const el = document.getElementById('agentChatLog');
-            if (!el || chatRendering) return;
-            chatRendering = true;
-            try {
-                renderActiveAgentChatIn(el);
-            } finally {
-                chatRendering = false;
-            }
+            if (chatRenderTimer) return;
+            chatRenderTimer = window.setTimeout(function () {
+                chatRenderTimer = 0;
+                const el = document.getElementById('agentChatLog');
+                if (!el || chatRendering) return;
+                chatRendering = true;
+                try {
+                    renderActiveAgentChatIn(el);
+                } finally {
+                    chatRendering = false;
+                }
+            }, CHAT_RENDER_MS);
         }
 
         function renderActiveAgentChatIn(el) {
@@ -3754,10 +3766,23 @@
             } else {
                 const lastBubble = lastNode ? lastNode.querySelector('.chat-bubble') : null;
                 if (lastBubble) {
-                    if (lastMsg && (lastMsg.role === 'text' ||
-                                    lastMsg.role === 'thinking' ||
-                                    lastMsg.role === 'monitorThinking')) {
-                        lastBubble.innerHTML = renderMarkdown(lastMsg.text);
+                    const streamingMd = lastMsg &&
+                        (lastMsg.role === 'text' ||
+                         lastMsg.role === 'thinking' ||
+                         lastMsg.role === 'monitorThinking');
+                    // While a streaming bubble is growing, re-render micromark only
+                    // every 150ms; render the raw text immediately between passes so
+                    // the pane tracks the model live without paying markdown parses
+                    // per token.
+                    if (streamingMd) {
+                        const now = Date.now();
+                        const bubble = lastBubble;
+                        if (bubble.__mdAt && now - bubble.__mdAt < MD_RENDER_MS) {
+                            bubble.textContent = lastMsg.text;
+                        } else {
+                            bubble.innerHTML = renderMarkdown(lastMsg.text);
+                            bubble.__mdAt = now;
+                        }
                     } else {
                         lastBubble.textContent = lastMsg ? lastMsg.text : '';
                     }

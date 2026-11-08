@@ -25,8 +25,13 @@ OutputTail(maxBytes::Int = 1 << 20) =
 function tailAppend!(t::OutputTail, chunk::Vector{UInt8})
     lock(t.lock) do
         append!(t.buf, chunk)
+        # Trim in BULK, not one chunk at a time: `deleteat!` memmoves the whole
+        # rolling window each call, so a per-append trim turned every keystroke
+        # into an O(maxBytes) copy once the 1 MiB window filled up. Trimming
+        # only when we overshoot by a chunk size amortizes the copy and keeps
+        # the absolute-offset contract intact.
         overflow = length(t.buf) - t.maxBytes
-        if overflow > 0
+        if overflow > 16384
             deleteat!(t.buf, 1:overflow)
             t.base += overflow
         end
@@ -437,6 +442,12 @@ const ALT_CARRY_BYTES = 16
 "Track whether a full-screen TUI currently owns the terminal (see struct docs)."
 function trackAltScreen!(sess::ReplSession, chunk::Vector{UInt8})
     lock(sess.lock) do
+        # Fast path: no ESC byte in the chunk and no carry from a split sequence:
+        # nothing could have changed the alternate-screen state. Echo-heavy
+        # sessions (plain keystrokes) avoid string allocation + regex per key.
+        if !sess.altScreen && isempty(sess.altCarry) && !(UInt8(0x1b) in chunk)
+            return nothing
+        end
         text = String(vcat(sess.altCarry, chunk))
         lastMark = nothing
         for m in eachmatch(_ALT_SCREEN_RE, text)
@@ -463,6 +474,21 @@ function processOsc133!(sess::ReplSession, chunk::Vector{UInt8})
             drop = length(sess.oscRawBuf) - OSC_CARRY_BYTES
             deleteat!(sess.oscRawBuf, 1:drop)
             sess.osc.beginPos = max(1, sess.osc.beginPos - drop)
+        end
+        # Fast path: no ESC bytes in the new chunk and no open command awaiting
+        # its D mark -> no marks to find or resolve. Keep only the carry window
+        # (a mark could still be split across the next chunk boundary).
+        hasEsc = UInt8(0x1b) in chunk
+        if !sess.osc.pendingOpen && !hasEsc
+            if length(sess.oscRawBuf) > OSC_CARRY_BYTES
+                drop = length(sess.oscRawBuf) - OSC_CARRY_BYTES
+                deleteat!(sess.oscRawBuf, 1:drop)
+                sess.osc.beginPos = max(1, sess.osc.beginPos - drop)
+            end
+            append!(sess.oscRawBuf, chunk)
+            length(sess.oscRawBuf) > OSC_RAW_WINDOW &&
+                deleteat!(sess.oscRawBuf, 1:(length(sess.oscRawBuf) - OSC_RAW_WINDOW))
+            return nothing
         end
         append!(sess.oscRawBuf, chunk)
         _oscTrace("scan chunk=" * escape_string(String(copy(chunk))))
