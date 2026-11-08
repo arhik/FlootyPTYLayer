@@ -815,6 +815,417 @@
         .statusbar-left,
         .statusbar-right { display: flex; gap: 16px; }
         .status-item { display: flex; align-items: center; gap: 6px; }
+        .workspace-sidebar {
+            flex: none;
+            width: 330px;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-left: 1px solid rgba(255, 255, 255, 0.12);
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            transition: width 0.2s ease, padding 0.2s ease;
+        }
+        .workspace-sidebar.closed {
+            width: 0;
+            border-left: none;
+        }
+        .workspace-sidebar[hidden] { display: none !important; }
+        .workspace-rail-toggle {
+            flex: none;
+            width: 30px;
+            border: none;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            background: transparent;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            cursor: pointer;
+            transition: color 0.2s ease, background 0.2s ease;
+        }
+        .workspace-rail-toggle:hover {
+            color: rgba(255, 255, 255, 0.92);
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .workspace-rail-toggle[hidden] { display: none; }
+        .workspace-sidebar .workspace-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .workspace-sidebar .workspace-header-icon { color: rgba(255, 255, 255, 0.72); }
+        .workspace-sidebar .workspace-header h3 {
+            flex: 1;
+            margin: 0;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .workspace-sidebar .workspace-close {
+            flex: none;
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 17px;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+        }
+        .workspace-sidebar .workspace-close:hover { color: rgba(255, 255, 255, 0.9); }
+        .workspace-sidebar .workspace-toolbar {
+            display: flex;
+            gap: 6px;
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        #workspaceAddPath {
+            flex: 1;
+            min-width: 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            border-radius: 4px;
+            outline: none;
+            color: rgba(255, 255, 255, 0.88);
+            font-size: 11px;
+            padding: 5px 7px;
+        }
+        #workspaceAddPath:focus { border-color: rgba(255, 255, 255, 0.28); }
+        .workspace-add-btn {
+            flex: none;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.84);
+            cursor: pointer;
+            font-size: 11px;
+            padding: 0 10px;
+            white-space: nowrap;
+        }
+        .workspace-add-btn:hover { background: rgba(255, 255, 255, 0.13); }
+        #workspaceSearch {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.045);
+            border: 1px solid rgba(255, 255, 255, 0.11);
+            border-radius: 4px;
+            outline: none;
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 11px;
+            padding: 5px 8px;
+            margin: 10px 12px 0 12px;
+            width: calc(100% - 24px);
+        }
+        #workspaceSearch:focus { border-color: rgba(255, 255, 255, 0.25); }
+        .drop-zone {
+            margin: 10px 12px;
+            min-height: 96px;
+            border: 1px dashed rgba(255, 255, 255, 0.22);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            color: rgba(255, 255, 255, 0.52);
+            cursor: pointer;
+            transition: border-color 0.18s ease, background 0.18s ease;
+        }
+        .drop-zone.drag-over {
+            border-color: rgba(212, 175, 90, 0.8);
+            background: rgba(212, 175, 90, 0.08);
+            color: rgba(255, 255, 255, 0.78);
+        }
+        .drop-zone svg { opacity: 0.66; }
+        .drop-zone p { margin: 0; font-size: 12px; font-weight: 600; }
+        .drop-hint { font-size: 10px; color: rgba(255, 255, 255, 0.4); }
+        .folder-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 8px 8px;
+        }
+        .folder-item {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.035);
+            padding: 8px;
+            margin-bottom: 6px;
+        }
+        .folder-item:hover { background: rgba(255, 255, 255, 0.06); }
+        .folder-item.attention {
+            border-color: rgba(212, 175, 90, 0.55);
+            background: rgba(212, 175, 90, 0.08);
+            box-shadow: 0 0 0 1px rgba(212, 175, 90, 0.18) inset;
+        }
+        .workspace-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 2px 6px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.09);
+            color: rgba(255, 255, 255, 0.42);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+        .workspace-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+        .workspace-section-badge {
+            flex: none;
+            border: 1px solid rgba(212, 175, 90, 0.55);
+            color: rgb(236, 198, 118);
+            border-radius: 999px;
+            font-size: 9px;
+            padding: 1px 6px;
+            letter-spacing: 0;
+            background: rgba(212, 175, 90, 0.16);
+        }
+        .attention-hint {
+            display: block;
+            margin-top: 4px;
+            color: rgb(236, 198, 118);
+            font-size: 9px;
+            line-height: 1.35;
+        }
+        @keyframes workspace-folder-flash {
+            0% { background: rgba(76, 255, 150, 0.22); border-color: rgba(76, 255, 150, 0.4); }
+            100% { background: rgba(255, 255, 255, 0.035); border-color: rgba(255, 255, 255, 0.09); }
+        }
+        .folder-item.file-change-flash { animation: workspace-folder-flash 0.5s ease-out; }
+        .folder-icon { color: rgba(255, 255, 255, 0.66); flex: none; margin-top: 1px; }
+        .folder-info { flex: 1; min-width: 0; }
+        .folder-name {
+            display: block;
+            color: rgba(255, 255, 255, 0.88);
+            font-size: 12px;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .folder-path {
+            display: block;
+            color: rgba(255, 255, 255, 0.42);
+            font-size: 10px;
+            font-family: Menlo, Consolas, monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+        .folder-actions {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+            flex: none;
+        }
+        .workspace-chip {
+            width: 22px;
+            height: 20px;
+            flex: none;
+            font-size: 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: transparent;
+            color: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+        }
+        .workspace-chip.on {
+            background: rgba(212, 175, 90, 0.18);
+            border-color: rgba(212, 175, 90, 0.75);
+            color: rgb(236, 198, 118);
+        }
+        .workspace-chip.locked,
+        .workspace-chip:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .folder-remove {
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.38);
+            cursor: pointer;
+            font-size: 15px;
+            width: 22px;
+            height: 22px;
+        }
+        .folder-remove:hover { color: rgba(255, 120, 120, 0.9); }
+        .workspace-sections {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            padding: 10px 10px 12px;
+            min-height: 0;
+        }
+        .workspace-section2 {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.035);
+            overflow: hidden;
+        }
+        .workspace-files-section { flex: 1 1 auto; min-height: 180px; }
+        .workspace-git-section { flex: none; max-height: 32vh; }
+        .workspace-section2-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 9px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+            color: rgba(255, 255, 255, 0.68);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+        .workspace-section-icon { opacity: 0.72; }
+        .workspace-section2-header span { flex: 1; }
+        .workspace-pane-refresh {
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+        }
+        .workspace-pane-refresh:hover { color: rgba(255, 255, 255, 0.9); }
+        .workspace-file-tree,
+        .workspace-git-status {
+            max-height: 100%;
+            overflow-y: auto;
+            padding: 5px 0;
+        }
+        .workspace-files-section .workspace-file-tree { max-height: 42vh; }
+        .workspace-git-section .workspace-git-status { max-height: 26vh; }
+        .workspace-tree-root,
+        .workspace-tree-folder,
+        .workspace-tree-file {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 8px;
+            min-width: 0;
+            font-size: 11px;
+        }
+        .workspace-tree-root {
+            padding-top: 6px;
+            padding-bottom: 6px;
+            color: rgba(255, 255, 255, 0.68);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            font-weight: 600;
+            cursor: default;
+        }
+        .workspace-tree-folder,
+        .workspace-tree-file { color: rgba(255, 255, 255, 0.68); }
+        button.workspace-tree-file {
+            width: 100%;
+            border: none;
+            background: transparent;
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+        }
+        .workspace-tree-file:hover,
+        .workspace-tree-folder:hover { background: rgba(255, 255, 255, 0.065); }
+        .workspace-tree-file.selected { background: rgba(212, 175, 90, 0.16); color: rgb(236, 198, 118); }
+        .workspace-tree-icon { flex: none; opacity: 0.78; }
+        .workspace-tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .workspace-empty-item { padding: 8px; color: rgba(255, 255, 255, 0.32); font-size: 11px; }
+        .workspace-permissions-details {
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.02);
+            overflow: hidden;
+        }
+        .workspace-permissions-details summary {
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.52);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            padding: 8px 10px;
+            user-select: none;
+        }
+        .workspace-permissions-details summary::marker { content: "▸ "; }
+        .workspace-permissions-details[open] summary::marker { content: "▾ "; }
+        #workspaceAttentionBadge { color: rgb(236, 198, 118); }
+        .git-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 7px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.52);
+        }
+        .git-summary strong { color: rgba(255, 255, 255, 0.82); font-weight: 600; }
+        .git-file-row {
+            display: grid;
+            grid-template-columns: 32px 1fr;
+            gap: 6px;
+            padding: 3px 8px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.62);
+        }
+        .git-file-row:hover { background: rgba(255, 255, 255, 0.06); }
+        .git-file-status { font-family: Menlo, Consolas, monospace; }
+        .git-staged { color: #7ee787; }
+        .git-unstaged { color: #ffd75f; }
+        .git-untracked { color: #79b8ff; }
+        .git-branch {
+            padding: 7px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            font: 11px Menlo, Consolas, monospace;
+            color: #8cc4ff;
+        }
+        .git-clean { padding: 10px; color: rgba(255, 255, 255, 0.35); font-size: 11px; }
+        .workspace-stats {
+            display: flex;
+            gap: 12px;
+            padding: 10px 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.42);
+            font-size: 11px;
+        }
+        .workspace-error {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin: 0 12px 10px;
+            padding: 8px 10px;
+            border: 1px solid rgba(255, 80, 80, 0.35);
+            border-radius: 5px;
+            background: rgba(255, 80, 80, 0.13);
+            color: rgba(255, 180, 180, 0.9);
+            font-size: 11px;
+        }
+        .workspace-error.visible { display: flex; }
+        .workspace-error button {
+            margin-left: auto;
+            border: none;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+        }
+        .workspace-empty {
+            padding: 18px 12px;
+            color: rgba(255, 255, 255, 0.36);
+            text-align: center;
+            font-size: 11px;
+        }
         /* Context-window meter: a tiny bar + the same numbers the loop logs
            (`ctx 12.3k/1M (1%)`). It is per ACTIVE session/tab. */
         #contextUsage[hidden] { display: none; }
@@ -1049,39 +1460,6 @@
         #typstEditorHost { flex: 1.35; border-right: 1px solid rgba(255,255,255,0.08); }
         #typstPdfHost { flex: 1; }
         #pdfLayerHost { width: 100%; height: 100%; }
-        .workspace-panel {
-            flex: 0 0 240px;
-            min-width: 190px;
-            max-width: 320px;
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-            background: rgba(19, 19, 28, 0.92);
-            border-right: 1px solid rgba(255, 255, 255, 0.07);
-            backdrop-filter: blur(20px);
-            z-index: 20;
-        }
-        .workspace-panel.is-open { display: flex; }
-        .workspace-panel-head { height: 34px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid rgba(255,255,255,0.07); }
-        .workspace-panel-title { color: rgba(219, 230, 247, 0.38); font: 10px var(--mono, ui-monospace, monospace); letter-spacing: 0.08em; text-transform: uppercase; }
-        .workspace-panel-actions { display: flex; gap: 4px; }
-        .workspace-icon-button { width: 25px; height: 25px; border: 0; border-radius: 5px; background: transparent; color: rgba(219,230,247,0.52); cursor: pointer; font-size: 14px; }
-        .workspace-icon-button:hover { color: #fff; background: rgba(255,255,255,0.07); }
-        .workspace-root { flex: none; padding: 8px 10px 10px; border-bottom: 1px solid rgba(255,255,255,0.055); }
-        .workspace-root-name { color: #fff; font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .workspace-root-path { margin-top: 2px; color: rgba(219,230,247,0.42); font: 10px var(--mono, ui-monospace, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .workspace-root-buttons { display: flex; gap: 5px; margin-top: 8px; }
-        .workspace-root-button { height: 23px; padding: 0 7px; border: 1px solid rgba(255,255,255,0.095); border-radius: 4px; background: rgba(255,255,255,0.04); color: rgba(219,230,247,0.72); font-size: 11px; cursor: pointer; }
-        .workspace-root-button:hover { color: #fff; background: rgba(255,255,255,0.07); }
-        .workspace-tree { flex: 1; overflow: auto; padding: 6px; }
-        .workspace-entry { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; height: 26px; padding: 0 7px; border: 0; border-radius: 5px; color: rgba(219,230,247,0.65); background: transparent; text-align: left; cursor: pointer; }
-        .workspace-entry:hover { background: rgba(255,255,255,0.055); color: #fff; }
-        .workspace-entry:focus-visible { outline: 2px solid var(--accent, #ffd84d); outline-offset: -2px; }
-        .workspace-entry.selected { color: var(--accent, #ffd84d); background: rgba(255,216,77,0.065); }
-        .workspace-entry-icon { flex: none; width: 13px; color: #7dcfff; font-size: 10px; text-align: center; }
-        .workspace-entry.is-dir .workspace-entry-icon { color: #ffd84d; }
-        .workspace-entry-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .workspace-empty { padding: 18px 7px; color: rgba(219,230,247,0.37); font-size: 12px; text-align: center; line-height: 1.5; }
         .browser-native-note {
         .browser-native-note {
             flex: none;
@@ -1659,25 +2037,6 @@
                  level); no nested tree in the left rail. -->
             <div id="childTabs" class="child-tabs"></div>
             <div class="workspace-body">
-                <aside id="workspacePanel" class="workspace-panel" aria-label="Workspace">
-                    <div class="workspace-panel-head">
-                        <div class="workspace-panel-title">Workspace</div>
-                        <div class="workspace-panel-actions">
-                            <button id="workspaceAdd" class="workspace-icon-button" type="button" title="Add folder" aria-label="Add folder">+</button>
-                            <button id="workspaceRefresh" class="workspace-icon-button" type="button" title="Refresh files" aria-label="Refresh files">↻</button>
-                            <button id="workspaceClose" class="workspace-icon-button" type="button" title="Hide workspace" aria-label="Hide workspace">×</button>
-                        </div>
-                    </div>
-                    <div id="workspaceRoot" class="workspace-root">
-                        <div id="workspaceRootName" class="workspace-root-name">No workspace</div>
-                        <div id="workspaceRootPath" class="workspace-root-path">Choose a project folder to get started.</div>
-                        <div class="workspace-root-buttons">
-                            <button id="workspaceChange" class="workspace-root-button" type="button">Change…</button>
-                            <button id="workspaceRename" class="workspace-root-button" type="button">Rename</button>
-                        </div>
-                    </div>
-                    <div id="workspaceTree" class="workspace-tree" role="tree" aria-label="Project files" aria-activedescendant=""></div>
-                </aside>
                 <div class="terminal-container" id="terminal-container"></div>
                 <div id="browserPanel" class="browser-panel" hidden>
                     <div class="browser-bar">
@@ -1721,6 +2080,62 @@
                 </div>
             </div>
             </div>
+                <aside id="workspacePanel" class="workspace-sidebar" aria-hidden="false">
+                    <div class="workspace-header">
+                        <svg class="workspace-header-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <h3>Workspace</h3>
+                        <button type="button" id="workspaceClose" class="workspace-close" title="Close workspace panel">×</button>
+                    </div>
+                    <div class="workspace-toolbar">
+                        <input id="workspaceAddPath" type="text" spellcheck="false"
+                               placeholder="/absolute/path/to/folder">
+                        <button type="button" id="workspaceAddBtn" class="workspace-add-btn">Add folder</button>
+                    </div>
+                    <input id="workspaceSearch" type="text" spellcheck="false" placeholder="Search folders...">
+                    <div id="workspaceDropZone" class="drop-zone" role="button" tabindex="0" title="Drop a folder to add it">
+                        <svg class="drop-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <p>Drop folder here</p>
+                        <span class="drop-hint">or paste/add an absolute path above</span>
+                    </div>
+                    <div class="workspace-sections">
+                        <section class="workspace-section2 workspace-files-section">
+                            <div class="workspace-section2-header">
+                                <svg class="workspace-section-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                <span>Files</span>
+                                <button type="button" id="workspaceFilesRefresh" class="workspace-pane-refresh" title="Refresh files">↻</button>
+                            </div>
+                            <div id="workspaceFileTree" class="workspace-file-tree"></div>
+                        </section>
+                        <section class="workspace-section2 workspace-git-section">
+                            <div class="workspace-section2-header">
+                                <svg class="workspace-section-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 6h8a4 4 0 0 1 4 4v4"></path><path d="M16 8h-4a4 4 0 0 0-4 4v4"></path></svg>
+                                <span>Changes</span>
+                                <button type="button" id="workspaceChangesRefresh" class="workspace-pane-refresh" title="Refresh changes">↻</button>
+                            </div>
+                            <div id="workspaceGitStatus" class="workspace-git-status"></div>
+                        </section>
+                        <details id="workspacePermissionsDetails" class="workspace-permissions-details">
+                            <summary>Workspace folders <span id="workspaceAttentionBadge"></span></summary>
+                            <div id="workspaceList" class="folder-list"></div>
+                        </details>
+                    </div>
+                    <div class="workspace-stats">
+                        <span id="workspaceFolderCount">0 folders</span>
+                        <span id="workspaceFileCount">0 files</span>
+                    </div>
+                    <div id="workspaceError" class="workspace-error">
+                        <span id="workspaceErrorMessage"></span>
+                        <button type="button" id="workspaceErrorClose" title="Dismiss">×</button>
+                    </div>
+                </aside>
+                <button type="button" id="workspaceRailToggle" class="workspace-rail-toggle" hidden title="Open workspace">WORKSPACE</button>
+            </div>
         </div>
     </div>
     </div>
@@ -1760,8 +2175,6 @@
             </div>
             <button id="sessionBtn" title="New session (sibling of the current one)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">+ session</button>
-            <button id="workspaceToggle" onclick="if (window.flootyWorkspaceToggle) window.flootyWorkspaceToggle(); else document.getElementById('workspacePanel').classList.toggle('is-open');" title="Toggle workspace sidebar"
-                    style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">workspace</button>
             <button id="splitBtn" title="Split the pane: Alt+D vertical (side by side), Alt+Shift+D horizontal (stacked)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">split</button>
             <div id="ownershipPill" class="owner-user" style="display:none"
@@ -5575,6 +5988,348 @@
             refresh();
         })();
 
+        (function installWorkspacePanel() {
+            const panel = document.getElementById('workspacePanel');
+            const rail = document.getElementById('workspaceRailToggle');
+            const closeBtn = document.getElementById('workspaceClose');
+            const list = document.getElementById('workspaceList');
+            const pathInput = document.getElementById('workspaceAddPath');
+            const addBtn = document.getElementById('workspaceAddBtn');
+            const search = document.getElementById('workspaceSearch');
+            const dropZone = document.getElementById('workspaceDropZone');
+            const folderCount = document.getElementById('workspaceFolderCount');
+            const fileCount = document.getElementById('workspaceFileCount');
+            const errorEl = document.getElementById('workspaceError');
+            const errorMessage = document.getElementById('workspaceErrorMessage');
+            const errorClose = document.getElementById('workspaceErrorClose');
+            const fileTree = document.getElementById('workspaceFileTree');
+            const changesStatus = document.getElementById('workspaceGitStatus');
+            const filesRefresh = document.getElementById('workspaceFilesRefresh');
+            const changesRefresh = document.getElementById('workspaceChangesRefresh');
+            const attentionBadge = document.getElementById('workspaceAttentionBadge');
+            if (!panel || !list) return;
+            let selectedWorkspacePath = '';
+            let workspaceFolders = [];
+            let searchQuery = '';
+            const currentTerminalId = () => {
+                const active = terminals[activeTerminalId];
+                return active && active.juliaId ? String(active.juliaId) : '';
+            };
+            let layoutInitialized = false;
+            const workspaceCall = (name, payload) =>
+                callJulia(name, JSON.stringify(payload)).catch(err => ({ success: false, error: String(err) }));
+            window.handleWorkspaceFileChange = payload => {
+                try {
+                    if (!panel.classList.contains('closed')) refresh();
+                    const id = payload && payload.folder_id ? String(payload.folder_id) : '';
+                    const item = id ? list.querySelector('.folder-item[data-id="' + id.replace(/"/g, '\\"') + '"]') : null;
+                    if (item) {
+                        item.classList.remove('file-change-flash');
+                        void item.offsetWidth;
+                        item.classList.add('file-change-flash');
+                    }
+                } catch (e) {}
+            };
+            window.handleWorkspaceNativeDrop = paths => {
+                try {
+                    const items = Array.isArray(paths) ? paths : [];
+                    for (const p of items) addPath(String(p), false);
+                    clearSearch();
+                } catch (e) {}
+            };
+            const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const showError = message => {
+                if (!errorEl || !errorMessage) return;
+                errorMessage.textContent = String(message || 'workspace request failed');
+                errorEl.classList.add('visible');
+            };
+            const hideError = () => { if (errorEl) errorEl.classList.remove('visible'); };
+            const setOpen = open => {
+                panel.classList.toggle('closed', !open);
+                panel.setAttribute('aria-hidden', String(!open));
+                if (rail) rail.hidden = !!open;
+                if (open) refresh();
+            };
+            const applyLayout = state => {
+                if (!state || !state.success || layoutInitialized) return;
+                layoutInitialized = true;
+                const panelVisible = state.workspace_visible !== false;
+                setOpen(panelVisible);
+            };
+            const render = state => {
+                if (!state || !state.success) {
+                    showError((state && state.error) || 'workspace unavailable');
+                    return;
+                }
+                applyLayout(state);
+                workspaceFolders = Array.isArray(state.folders) ? state.folders : [];
+                draw();
+            };
+            const renderFolder = f => {
+                const locked = f.locked === true;
+                const attention = f.attention === true;
+                const attentionReason = String(f.attention_reason || '');
+                const on = p => !locked && Array.isArray(f.permissions) && f.permissions.includes(p);
+                const folderPath = String(f.path || '');
+                return '<div class="folder-item' + (attention ? ' attention' : '') + '" data-id="' + esc(f.id) + '">' +
+                    '<svg class="folder-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+                        '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>' +
+                    '</svg>' +
+                    '<div class="folder-info">' +
+                        '<span class="folder-name" title="' + esc(f.name || '(folder)') + '">' + esc(f.name || '(folder)') + '</span>' +
+                        '<span class="folder-path" title="' + esc(folderPath) + '">' + esc(folderPath) + '</span>' +
+                        (attention ? '<span class="attention-hint">needs permission' +
+                            (attentionReason ? ' · ' + esc(attentionReason) : '') + '</span>' : '') +
+                    '</div>' +
+                    '<div class="folder-actions">' +
+                        '<button type="button" class="workspace-chip' + (on('read') ? ' on' : '') + '" data-perm="read" title="read"' + (locked ? ' disabled' : '') + '>R</button>' +
+                        '<button type="button" class="workspace-chip' + (on('write') ? ' on' : '') + '" data-perm="write" title="write"' + (locked ? ' disabled' : '') + '>W</button>' +
+                        '<button type="button" class="workspace-chip' + (on('execute') ? ' on' : '') + '" data-perm="execute" title="execute"' + (locked ? ' disabled' : '') + '>X</button>' +
+                        '<button type="button" class="workspace-chip' + (locked ? ' on' : '') + '" data-perm="locked" title="lock/unlock">L</button>' +
+                        '<button type="button" class="folder-remove" data-remove="1" title="Remove folder">×</button>' +
+                    '</div>' +
+                '</div>';
+            };
+            const section = (label, items, needs) => {
+                if (!items.length) return '';
+                const badge = needs ? '<span class="workspace-section-badge">' + items.length + '</span>' : '';
+                return '<div class="workspace-section' + (needs ? ' needs' : '') + '">' + esc(label) + badge + '</div>' +
+                       items.map(renderFolder).join('');
+            };
+            const entryMatches = (entry, q) => {
+                const name = String(entry.name || '').toLowerCase();
+                const path = String(entry.path || entry.relative || '').toLowerCase();
+                if (!q || name.includes(q) || path.includes(q)) return true;
+                return Array.isArray(entry.children) && entry.children.some(child => entryMatches(child, q));
+            };
+            const filterTree = tree => {
+                const q = searchQuery.trim().toLowerCase();
+                if (!q) return tree;
+                const filterEntry = entry => {
+                    const filtered = {
+                        ...entry,
+                        children: Array.isArray(entry.children) ? entry.children.map(filterEntry).filter(Boolean) : []
+                    };
+                    const self = String(entry.name || '').toLowerCase().includes(q) || String(entry.path || '').toLowerCase().includes(q);
+                    return (self || filtered.children.length) ? filtered : null;
+                };
+                return tree.map(root => {
+                    const filtered = {
+                        ...root,
+                        children: Array.isArray(root.children) ? root.children.map(filterEntry).filter(Boolean) : []
+                    };
+                    return filtered;
+                });
+            };
+            const renderTreeEntry = (entry, depth = 0) => {
+                const indent = 8 + depth * 16;
+                const isDirectory = entry.type === 'directory';
+                const icon = isDirectory
+                    ? '<svg class="workspace-tree-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>'
+                    : '<svg class="workspace-tree-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+                const selected = String(entry.path) === selectedWorkspacePath ? ' selected' : '';
+                const row = isDirectory
+                    ? '<div class="workspace-tree-folder" style="padding-left:' + indent + 'px">' + icon + '<span class="workspace-tree-name" title="' + esc(entry.name) + '">' + esc(entry.name) + '</span></div>'
+                    : '<button type="button" class="workspace-tree-file' + selected + '" data-path="' + esc(entry.path) + '" style="padding-left:' + indent + 'px">' + icon + '<span class="workspace-tree-name" title="' + esc(entry.path) + '">' + esc(entry.name) + '</span></button>';
+                const children = Array.isArray(entry.children) ? entry.children.map(child => renderTreeEntry(child, depth + 1)).join('') : '';
+                return row + children;
+            };
+            const renderFiles = state => {
+                if (!fileTree) return;
+                if (!state || !state.success) { fileTree.innerHTML = '<div class="workspace-empty-item">' + esc((state && state.error) || 'files unavailable') + '</div>'; return; }
+                const trees = Array.isArray(state.tree) ? state.tree : [];
+                const filtered = filterTree(trees);
+                if (!filtered.length) {
+                    fileTree.innerHTML = '<div class="workspace-empty-item">No granted folders yet.</div>';
+                    return;
+                }
+                fileTree.innerHTML = filtered.map(root => {
+                    if (!root || root.error) return '<div class="workspace-tree-root">' + esc(root?.name || '(folder)') + '</div><div class="workspace-empty-item">' + esc(root?.error || 'unreadable folder') + '</div>';
+                    const header = '<div class="workspace-tree-root" title="' + esc(root.path || '') + '">' + esc(root.name || '(folder)') + '</div>';
+                    const children = Array.isArray(root.children) ? root.children.map(child => renderTreeEntry(child, 1)).join('') : '<div class="workspace-empty-item">empty folder</div>';
+                    return header + children;
+                }).join('');
+                fileTree.querySelectorAll('.workspace-tree-file').forEach(el => {
+                    el.addEventListener('click', () => {
+                        selectedWorkspacePath = el.getAttribute('data-path') || '';
+                        fileTree.querySelectorAll('.workspace-tree-file.selected').forEach(row => row.classList.remove('selected'));
+                        el.classList.add('selected');
+                    });
+                });
+            };
+            const renderChanges = state => {
+                if (!changesStatus) return;
+                if (!state || !state.success) { changesStatus.innerHTML = '<div class="workspace-empty-item">' + esc((state && state.error) || 'changes unavailable') + '</div>'; return; }
+                const branch = state.repository ? String(state.branch || '').trim() : 'not a git repository';
+                const changed = Number(state.changed || 0);
+                const staged = Number(state.staged || 0);
+                const unstaged = Number(state.unstaged || 0);
+                const untracked = Number(state.untracked || 0);
+                if (!state.repository) {
+                    changesStatus.innerHTML = '<div class="git-clean">not a git repository</div>';
+                    return;
+                }
+                const files = Array.isArray(state.files) ? state.files : [];
+                const fileRows = files.length
+                    ? files.map(file => {
+                        const status = String(file.status || '?').trim();
+                        const klass = file.untracked ? 'git-untracked' : (file.staged ? 'git-staged' : 'git-unstaged');
+                        return '<div class="git-file-row"><span class="git-file-status ' + klass + '">' + esc(status) + '</span><span class="workspace-tree-name" title="' + esc(file.path) + '">' + esc(file.path) + '</span></div>';
+                    }).join('')
+                    : '<div class="git-clean">working tree clean</div>';
+                changesStatus.innerHTML = '<div class="git-branch">' + esc(branch) + '</div>' +
+                    '<div class="git-summary"><span><strong>' + changed + '</strong> changed</span><span><strong>' + staged + '</strong> staged</span><span><strong>' + unstaged + '</strong> unstaged</span><span><strong>' + untracked + '</strong> untracked</span></div>' + fileRows;
+            };
+            const renderPanes = (filesState, changesState) => {
+                renderFiles(filesState);
+                renderChanges(changesState);
+                if (attentionBadge) {
+                    const attention = workspaceFolders.filter(f => f.attention === true).length;
+                    attentionBadge.textContent = attention ? '· ' + attention + ' need access' : '';
+                }
+            };
+            const refresh = async () => {
+                const [state, files, changes] = await Promise.all([
+                    workspaceCall('workspaceState', { terminal_id: currentTerminalId() }),
+                    workspaceCall('workspaceFiles', { terminal_id: currentTerminalId(), folder_id: '' }),
+                    workspaceCall('workspaceChanges', { terminal_id: currentTerminalId() })
+                ]);
+                if (state && state.success) hideError();
+                render(state);
+                renderPanes(files, changes);
+            };
+            const refreshPanesOnly = async () => {
+                const [files, changes] = await Promise.all([
+                    workspaceCall('workspaceFiles', { terminal_id: currentTerminalId(), folder_id: '' }),
+                    workspaceCall('workspaceChanges', { terminal_id: currentTerminalId() })
+                ]);
+                renderPanes(files, changes);
+            };
+            if (filesRefresh) filesRefresh.addEventListener('click', refreshPanesOnly);
+            if (changesRefresh) changesRefresh.addEventListener('click', refreshPanesOnly);
+            const draw = () => {
+                const q = searchQuery.trim().toLowerCase();
+                const match = f => !q ||
+                    String(f.name || '').toLowerCase().includes(q) ||
+                    String(f.path || '').toLowerCase().includes(q) ||
+                    String(f.attention_reason || '').toLowerCase().includes(q);
+                const filtered = workspaceFolders.filter(match);
+                const granted = filtered.filter(f => f.attention !== true);
+                const attention = filtered.filter(f => f.attention === true);
+                const totalFiles = workspaceFolders.reduce((sum, f) => sum + (Number(f.file_count) || 0), 0);
+                const anyTruncated = workspaceFolders.some(f => f.count_truncated === true);
+                if (folderCount) folderCount.textContent = `${workspaceFolders.length} folder${workspaceFolders.length === 1 ? '' : 's'}` +
+                    (attention.length ? ` · ${attention.length} need${attention.length === 1 ? 's' : ''} access` : '');
+                if (fileCount) fileCount.textContent = `${totalFiles}${anyTruncated ? '+' : ''} files`;
+                if (!filtered.length) {
+                    list.innerHTML = '<div class="workspace-empty">' + (q ? 'No folders match the search.' : 'No folders yet — paste a path or drop one here.') + '</div>';
+                    return;
+                }
+                list.innerHTML = section('Granted', granted, false) + section('Needs attention', attention, true);
+            };
+            const mutate = async (name, payload) => {
+                const result = await workspaceCall(name, payload);
+                if (result && !result.success) showError(result.error || `${name} failed`);
+                await refresh();
+                return result;
+            };
+            const isLikelyAbsolutePath = p =>
+                p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\');
+            const extractDroppedPaths = e => {
+                const dt = e.dataTransfer;
+                if (!dt) return [];
+                const out = [];
+                const seen = new Set();
+                const add = p => {
+                    let s = String(p || '').trim();
+                    if (!s) return;
+                    try {
+                        if (/^file:/i.test(s)) {
+                            const url = new URL(s);
+                            s = decodeURIComponent(url.pathname);
+                            if (/^\/[A-Za-z]:\//.test(s)) s = s.slice(1);
+                        }
+                    } catch (_) {}
+                    if (isLikelyAbsolutePath(s) && !seen.has(s)) {
+                        seen.add(s);
+                        out.push(s);
+                    }
+                };
+                for (const type of ['text/uri-list', 'text/plain', 'text/x-moz-url', 'URL']) {
+                    try {
+                        const raw = dt.getData(type);
+                        if (!raw) continue;
+                        for (const line of String(raw).split(/\r?\n/)) {
+                            const s = line.trim();
+                            if (s && !s.startsWith('#')) add(s);
+                        }
+                    } catch (_) {}
+                }
+                for (const file of Array.from(dt.files || [])) {
+                    add(file.path);
+                }
+                return out;
+            };
+            const addPath = async (path, clearInput = true) => {
+                const clean = String(path || '').trim();
+                if (!clean) return showError('Enter an absolute folder path');
+                await mutate('workspaceAddFolder', { terminal_id: currentTerminalId(), path: clean, name: '' });
+                if (clearInput && pathInput) pathInput.value = '';
+            };
+            const clearSearch = () => {
+                if (search) { search.value = ''; searchQuery = ''; }
+            };
+            if (closeBtn) closeBtn.addEventListener('click', () => setOpen(false));
+            if (rail) rail.addEventListener('click', () => setOpen(true));
+            if (addBtn) addBtn.addEventListener('click', () => addPath(pathInput ? pathInput.value : ''));
+            if (pathInput) pathInput.addEventListener('keydown', ev => {
+                if (ev.key === 'Enter') { ev.preventDefault(); addPath(pathInput.value); }
+            });
+            let paneRefreshTimer = null;
+            if (search) search.addEventListener('input', () => {
+                searchQuery = search.value;
+                draw();
+                clearTimeout(paneRefreshTimer);
+                paneRefreshTimer = setTimeout(() => { refreshPanesOnly(); }, 180);
+            });
+            if (errorClose) errorClose.addEventListener('click', hideError);
+            if (dropZone) {
+                dropZone.addEventListener('click', () => { if (pathInput) pathInput.focus(); });
+                dropZone.addEventListener('keydown', ev => {
+                    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); if (pathInput) pathInput.focus(); }
+                });
+                dropZone.addEventListener('dragover', ev => {
+                    ev.preventDefault();
+                    ev.dataTransfer.dropEffect = 'copy';
+                    dropZone.classList.add('drag-over');
+                });
+                dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+                dropZone.addEventListener('drop', async ev => {
+                    ev.preventDefault();
+                    dropZone.classList.remove('drag-over');
+                    const paths = extractDroppedPaths(ev);
+                    if (!paths.length) {
+                        showError('The webview did not expose a filesystem path for that drop; paste the absolute path instead.');
+                        return;
+                    }
+                    for (const p of paths) await addPath(p, false);
+                    clearSearch();
+                });
+            }
+            list.addEventListener('click', ev => {
+                const chip = ev.target.closest('.workspace-chip');
+                const row = ev.target.closest('.folder-item');
+                const remove = ev.target.closest('.folder-remove');
+                if (!row) return;
+                const id = row.getAttribute('data-id');
+                if (remove) { mutate('workspaceRemoveFolder', { terminal_id: currentTerminalId(), folder_id: id }); return; }
+                if (!chip) return;
+                mutate('workspaceTogglePermission', { terminal_id: currentTerminalId(), folder_id: id, permission: chip.getAttribute('data-perm') });
+            });
+            setInterval(() => { if (!panel.classList.contains('closed')) refresh(); }, 2000);
+            refresh();
+        })();
+
         // WKWebView does not implement window.prompt (Webviews has no
         // runJavaScriptTextInputPanelWithPrompt delegate), so the native dialog
         // silently returned nothing and SSH/browser creation did nothing.
@@ -6181,140 +6936,6 @@
         window.editorLayer = mountEditorLayer(typstEditorHost);
         window.typstPdfLayer = mountPdfLayer(typstPdfHost);
         window.pdfLayer = mountPdfLayer(document.getElementById('pdfLayerHost'));
-    </script>
-
-    <script>
-                (function installWorkspacePanel() {
-                        const panel = document.getElementById('workspacePanel');
-            const rootName = document.getElementById('workspaceRootName');
-            const rootPath = document.getElementById('workspaceRootPath');
-            const tree = document.getElementById('workspaceTree');
-            const add = document.getElementById('workspaceAdd');
-            const refresh = document.getElementById('workspaceRefresh');
-            const change = document.getElementById('workspaceChange');
-            const close = document.getElementById('workspaceClose');
-            const toggle = document.getElementById('workspaceToggle');
-
-            function escapeHtml(value) {
-                return String(value ?? '').replace(/[&<>"']/g, c => ({
-                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-                }[c]));
-            }
-
-            function setOpen(open) {
-                if (!panel) return;
-                panel.classList.toggle('is-open', Boolean(open));
-                try { localStorage.setItem('flooty:workspace-open', open ? '1' : '0'); } catch (_e) {}
-            }
-
-            function renderEntries(entries) {
-                if (!tree) return;
-                const rows = Array.isArray(entries) ? entries : [];
-                if (!rows.length) {
-                    tree.innerHTML = '<div class="workspace-empty">Empty workspace</div>';
-                    return;
-                }
-                tree.innerHTML = rows.map(entry => {
-                    const depth = Math.max(0, Number(entry.depth) || 0);
-                    const icon = entry.isDir ? (entry.expanded ? '▾' : '▸') : '◆';
-                    const path = String(entry.path || '');
-                    return '<button class="workspace-entry' + (entry.isDir ? ' is-dir' : '') + '" type="button" ' +
-                        'role="treeitem" aria-level="' + (depth + 1) + '" aria-expanded="' + String(Boolean(entry.expanded)) + '" ' +
-                        'data-path="' + escapeHtml(path) + '" data-is-dir="' + String(Boolean(entry.isDir)) + '" ' +
-                        'style="padding-left:' + (10 + depth * 15) + 'px">' +
-                        '<span class="workspace-entry-icon">' + icon + '</span>' +
-                        '<span class="workspace-entry-name">' + escapeHtml(entry.name) + '</span>' +
-                    '</button>';
-                }).join('');
-            }
-
-            function rootNameFor(path) {
-                const normalized = String(path || '').replace(/\/g, '/');
-                if (!normalized || normalized === '/') return normalized || 'Workspace';
-                const parts = normalized.split('/').filter(Boolean);
-                return parts.length ? parts[parts.length - 1] : normalized;
-            }
-
-            function updateMeta(meta) {
-                const path = String(meta && meta.path || '');
-                if (rootName) rootName.textContent = path ? rootNameFor(path) : 'No workspace';
-                if (rootPath) rootPath.textContent = path || 'Choose a project folder to get started.';
-                if (tree) tree.setAttribute('aria-activedescendant', '');
-            }
-
-            function loadWorkspace(root) {
-                const requested = root == null ? '' : String(root);
-                return callJulia('flootyWorkspace', JSON.stringify({ kind: 'state', root: requested }))
-                    .then(result => {
-                        if (!result || result.success === false) {
-                            throw new Error(result && result.error || 'Could not load workspace');
-                        }
-                        updateMeta(result);
-                        renderEntries(result.entries || []);
-                        setOpen(true);
-                        return result;
-                    })
-                    .catch(error => {
-                        if (rootPath) rootPath.textContent = String(error && error.message || error);
-                        if (tree) tree.innerHTML = '<div class="workspace-empty">Could not open folder</div>';
-                        setOpen(true);
-                        return null;
-                    });
-            }
-
-                        if (add) {
-                add.addEventListener('click', async () => {
-                    const existing = rootPath && !rootPath.textContent.includes('Choose') ? rootPath.textContent.trim() : '/';
-                    const path = await flootyPrompt('Project folder', '/path/to/project', existing);
-                    if (path && String(path).trim()) loadWorkspace(String(path).trim());
-                });
-            }
-            if (refresh) refresh.addEventListener('click', () => loadWorkspace(rootPath ? rootPath.textContent.trim() : ''));
-            if (change) {
-                change.addEventListener('click', async () => {
-                    const existing = rootPath ? rootPath.textContent.trim() : '/';
-                    const path = await flootyPrompt('Project folder', '/path/to/project', existing);
-                    if (path && String(path).trim()) loadWorkspace(String(path).trim());
-                });
-            }
-            if (close) close.addEventListener('click', () => setOpen(false));
-            if (toggle) {
-                toggle.addEventListener('click', () => {
-                    if (typeof window.flootyWorkspaceToggle === 'function') {
-                        window.flootyWorkspaceToggle();
-                    } else {
-                        panel.classList.toggle('is-open');
-                    }
-                });
-            }
-
-            if (tree) {
-                tree.addEventListener('click', event => {
-                    const button = event.target.closest('.workspace-entry');
-                    if (!button) return;
-                    event.preventDefault();
-                    tree.querySelectorAll('.workspace-entry').forEach(item => item.classList.toggle('selected', item === button));
-                    if (button.dataset.isDir === 'true') {
-                        callJulia('flootyWorkspace', JSON.stringify({ kind: 'toggle', path: button.dataset.path }))
-                            .then(result => renderEntries(result && result.entries || []))
-                            .catch(error => { if (rootPath) rootPath.textContent = String(error && error.message || error); });
-                        return;
-                    }
-                    const editor = window.editorLayer && typeof window.editorLayer.api === 'function' ? window.editorLayer.api() : null;
-                    const session = editor && typeof editor.session === 'function' ? editor.session() : '';
-                    if (!session) return;
-                    callJulia('flootyEditorRead', JSON.stringify({ session, path: button.dataset.path }))
-                        .then(result => {
-                            if (!result || result.success === false) throw new Error(result && result.error || 'could not read file');
-                            return editor.setDocument({ path: result.path, content: result.content, language: 'typst', saved: true });
-                        })
-                        .catch(error => { if (rootPath) rootPath.textContent = String(error && error.message || error); });
-                });
-            }
-
-                        setOpen(true);
-                        loadWorkspace('');
-                    })();
     </script>
 
     <script type="module">

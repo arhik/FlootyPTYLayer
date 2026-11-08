@@ -987,6 +987,8 @@ const WORKSPACE_STATE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const WORKSPACE_ADD_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const WORKSPACE_REMOVE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const WORKSPACE_TOGGLE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_FILES_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_CHANGELS_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 
 "Install the provider of the app's root chat session id."
 function addChatSessionProvider!(f::Function)
@@ -1107,17 +1109,23 @@ function addAgentModelHooks!(provider::Function, selector::Function,
 end
 
 """
-    addWorkspaceHooks!(state, add, remove, toggle)
+    addWorkspaceHooks!(state, add, remove, toggle, files = nothing, changes = nothing)
 
 Install the agent's workspace controller. `state(session_id)` returns the
 folder list + summary; `add(session_id, path, name)` adds one; `remove` and
-`toggle` mutate the folder set. All may fail; the panel degrades to empty.
+`toggle` mutate the folder set. `files(session_id, folder_id)` returns the file
+tree; `changes(session_id)` returns git status. All may fail; the panel
+degrades to empty.
 """
-function addWorkspaceHooks!(state::Function, add::Function, remove::Function, toggle::Function)
+function addWorkspaceHooks!(state::Function, add::Function, remove::Function, toggle::Function,
+                            files::Union{Function,Nothing}=nothing,
+                            changes::Union{Function,Nothing}=nothing)
     WORKSPACE_STATE_HANDLER[] = state
     WORKSPACE_ADD_HANDLER[] = add
     WORKSPACE_REMOVE_HANDLER[] = remove
     WORKSPACE_TOGGLE_HANDLER[] = toggle
+    files === nothing || (WORKSPACE_FILES_HANDLER[] = files)
+    changes === nothing || (WORKSPACE_CHANGELS_HANDLER[] = changes)
     return nothing
 end
 
@@ -3868,6 +3876,25 @@ function registerTerminalBindings!(wv)
         folder = payload === nothing ? "" : jsonStr(payload, :folder_id)
         permission = payload === nothing ? "" : jsonStr(payload, :permission)
         JSON.json(workspaceInvoke(WORKSPACE_TOGGLE_HANDLER, String(tid), String(folder), String(permission)))
+    end
+    Webviews.bind(wv, "workspaceFiles") do args
+        payload = try
+            jsonArgs(args)
+        catch
+            nothing
+        end
+        tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
+        folder = payload === nothing ? "" : jsonStr(payload, :folder_id)
+        JSON.json(workspaceInvoke(WORKSPACE_FILES_HANDLER, String(tid), String(folder)))
+    end
+    Webviews.bind(wv, "workspaceChanges") do args
+        payload = try
+            jsonArgs(args)
+        catch
+            nothing
+        end
+        tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
+        JSON.json(workspaceInvoke(WORKSPACE_CHANGELS_HANDLER, String(tid)))
     end
     Webviews.bind(wv, "flootySplitCreated") do args
         resp = try
