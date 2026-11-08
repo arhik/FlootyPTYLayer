@@ -34,20 +34,29 @@ mutable struct ShadowTerm
     autowrap::Bool
     cursor_visible::Bool
     title::String
+    alt_active::Bool
+    alt_grid::Union{Grid,Nothing}
+    main_grid::Union{Grid,Nothing}
+    origin_mode::Bool
 end
 
 function ShadowTerm(cols::Integer = 80, rows::Integer = 24)
     c = max(1, Int(cols)); r = max(1, Int(rows))
     ShadowTerm(Parser(), Grid(c, r), c, r, 0, 0, false, 0, 0,
                DEFAULT_COLOR, DEFAULT_COLOR, 0x00,
-               0, r - 1, true, true, "")
+               0, r - 1, true, true, "", false, nothing, nothing, false)
 end
 
-blank(t::ShadowTerm) = Cell(char = UInt32(0x20), fg = t.fg, bg = t.bg,
-                            flags = t.flags, width = WIDTH_NARROW)
+# Background-color erase: xterm fills erased cells with the CURRENT background
+# (and zeroed fg/flags) — not the default palette. The initial blank grid still
+# starts clean because fg/bg default to DEFAULT_COLOR.
+blank(t::ShadowTerm) = Cell(char = UInt32(0x20), fg = DEFAULT_COLOR, bg = t.bg,
+                            flags = 0x00, width = WIDTH_NARROW)
 
 function shadowClear!(t::ShadowTerm)
-    clear!(t.grid)
+    for r in 0:(t.rows - 1)
+        clearrow!(t.grid, r, blank(t))
+    end
     t.cur_row = 0; t.cur_col = 0
     t.wrap_pending = false
     return t
@@ -58,6 +67,8 @@ function shadowResize!(t::ShadowTerm, cols::Integer, rows::Integer)
     (c == t.cols && r == t.rows) && return t
     t.cols = c; t.rows = r
     reset!(t.grid, c, r)
+    t.main_grid === nothing || reset!(t.main_grid, c, r)
+    t.alt_grid === nothing  || reset!(t.alt_grid, c, r)
     t.cur_row = clamp(t.cur_row, 0, r - 1)
     t.cur_col = clamp(t.cur_col, 0, c - 1)
     t.scroll_top = 0; t.scroll_bottom = r - 1
@@ -68,6 +79,31 @@ end
 function scrollregion!(t::ShadowTerm, n::Integer)
     n <= 0 && return
     scrollUp!(t.grid, t.scroll_top, t.scroll_bottom, n, blank(t))
+end
+
+function enterAltScreen!(t::ShadowTerm)
+    t.alt_active && return t
+    t.main_grid = t.grid
+    if t.alt_grid === nothing
+        t.alt_grid = Grid(t.cols, t.rows)
+    else
+        reset!(t.alt_grid, t.cols, t.rows)
+    end
+    t.grid = t.alt_grid
+    t.alt_active = true
+    t.scroll_top = 0; t.scroll_bottom = t.rows - 1
+    t.cur_row = 0; t.cur_col = 0
+    t.wrap_pending = false
+    return t
+end
+
+function exitAltScreen!(t::ShadowTerm)
+    t.alt_active || return t
+    t.grid = t.main_grid
+    t.alt_active = false
+    t.scroll_top = 0; t.scroll_bottom = t.rows - 1
+    t.wrap_pending = false
+    return t
 end
 
 function linefeed!(t::ShadowTerm)
@@ -188,9 +224,16 @@ function csi!(t::ShadowTerm, p::Parser)
     elseif final == Char(0x47) || final == Char(0x60)
         t.cur_col = clamp(p1 - 1, 0, t.cols - 1); t.wrap_pending = false
     elseif final == Char(0x64)
-        t.cur_row = clamp(p1 - 1, 0, t.rows - 1); t.wrap_pending = false
+        row = p1 - 1
+        top = t.origin_mode ? t.scroll_top : 0
+        bot = t.origin_mode ? t.scroll_bottom : t.rows - 1
+        t.cur_row = clamp(t.origin_mode ? t.scroll_top + row : row, top, bot)
+        t.wrap_pending = false
     elseif final == Char(0x48) || final == Char(0x66)
-        t.cur_row = clamp(p1 - 1, 0, t.rows - 1)
+        row = p1 - 1
+        top = t.origin_mode ? t.scroll_top : 0
+        bot = t.origin_mode ? t.scroll_bottom : t.rows - 1
+        t.cur_row = clamp(t.origin_mode ? t.scroll_top + row : row, top, bot)
         t.cur_col = clamp(p2 - 1, 0, t.cols - 1)
         t.wrap_pending = false
     elseif final == Char(0x4A)
@@ -206,7 +249,9 @@ function csi!(t::ShadowTerm, p::Parser)
             end
             clearRange!(t.grid, t.cur_row, 0, t.cur_col + 1, blank(t))
         else
-            clear!(t.grid)
+            for r in 0:(t.rows - 1)
+                clearrow!(t.grid, r, blank(t))
+            end
         end
     elseif final == Char(0x4B)
         mode = n == 0 ? 0 : Int(getparam(p, 0, 0))
@@ -248,10 +293,25 @@ function csi!(t::ShadowTerm, p::Parser)
         sgr!(t, p)
     elseif final == Char(0x68) || final == Char(0x6C)
         on = final == Char(0x68)
+        private = p.csi_private == UInt8(0x3F)   # '?' — all xterm DECSET/DECRST
         for k in 0:(n - 1)
             m = Int(getparam(p, k, 0))
-            m == 7 && (t.autowrap = on)
-            m == 25 && (t.cursor_visible = on)
+            if private
+                if m == 7          # DECAWM: autowrap
+                    t.autowrap = on
+                elseif m == 25     # DECTCEM: cursor visibility
+                    t.cursor_visible = on
+                elseif m == 47 || m == 1047 || m == 1049   # alt screen
+                    on ? enterAltScreen!(t) : exitAltScreen!(t)
+                    m == 1049 && (t.saved_row = t.cur_row; t.saved_col = t.cur_col)
+                    m == 1049 && !on && (t.cur_row = clamp(t.saved_row, 0, t.rows - 1);
+                                         t.cur_col = clamp(t.saved_col, 0, t.cols - 1))
+                elseif m == 6       # DECOM: origin mode (relative to scroll region)
+                    t.origin_mode = on
+                    t.cur_row = on ? t.scroll_top : 0
+                    t.cur_col = 0
+                end
+            end
         end
     end
     return
@@ -279,6 +339,7 @@ function esc!(t::ShadowTerm, p::Parser)
         t.fg = DEFAULT_COLOR; t.bg = DEFAULT_COLOR; t.flags = 0x00
         t.autowrap = true; t.cursor_visible = true
         t.scroll_top = 0; t.scroll_bottom = t.rows - 1
+        t.origin_mode = false
     end
     return
 end

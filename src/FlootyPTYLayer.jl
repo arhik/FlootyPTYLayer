@@ -42,6 +42,7 @@ export launchTerminalUI, runTerminalUI, stopTerminalUI,
     applyOwnershipAction!, createTerminalUi,
     terminalBufferFor, shadowLines, shadowText, shadowCursor, shadowResize!,
     shadowTextFor, shadowLinesFor,
+    gridChecksum, terminalDivergence,
     openBrowserWindow!, navigateBrowserWindow!, closeBrowserWindow!,
     closeAllBrowserWindows!, browserWindowInfo, browserWindowOpen,
     addAgentModelHooks!, agentModelState, setSplitSession!,
@@ -60,6 +61,8 @@ include("controlState.jl")
 include("session.jl")
 include("shadowTerminal.jl")
 include("flootyWebUi.jl")
+include("divergence.jl")
+
 include("browserWindow.jl")
 
 const TerminalSession = ReplSession

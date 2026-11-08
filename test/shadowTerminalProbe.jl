@@ -107,3 +107,50 @@ else
     foreach(f -> println("  - ", f), failures)
     exit(1)
 end
+let t = term(20, 4, "")
+    S.shadowFeed!(t, "\e[41m")          # current bg is red
+    S.shadowFeed!(t, "\e[2J")          # erase whole screen
+    c = S.getcell(t.grid, 0, 0)
+    check("BCE: erased cell carries current bg", c.bg == 1 && c.char == UInt32(0x20))
+end
+
+let t = term(10, 3, "main")
+    S.shadowFeed!(t, "\e[?1049h")
+    check("alt screen starts blank", all(isempty, S.shadowLines(t)))
+    S.shadowFeed!(t, "ALT")
+    check("alt screen shows writes", S.shadowLines(t)[1] == "ALT")
+    S.shadowFeed!(t, "\e[?1049l")
+    check("main screen is restored on exit", S.shadowLines(t)[1] == "main")
+end
+
+let t = term(10, 3, "m")
+    S.shadowFeed!(t, "\e[?47h\e[?25l\e[?25h\e[?47l")
+    check("47/25 alternate + cursor toggle roundtrip works",
+          S.shadowLines(t)[1] == "m" && t.cursor_visible == true && !t.alt_active)
+end
+let t = term(20, 4, "\e[2;4r")          # scroll region rows 2..4
+    S.shadowFeed!(t, "\e[?6h")          # origin mode: CUP relative to scroll region
+    S.shadowFeed!(t, "\e[1;1H")         # should address scroll_top (row 1 1-based)
+    check("DECOM: CUP 1,1 lands on scroll_top", t.cur_row == 1)
+    S.shadowFeed!(t, "\e[?6l")          # back to absolute
+    S.shadowFeed!(t, "\e[1;1H")
+    check("DECOM off: CUP 1,1 lands on row 0", t.cur_row == 0)
+end
+
+let t = term(20, 4, "")
+    S.shadowFeed!(t, "\e[41m")          # red bg
+    S.shadowFeed!(t, "AB")
+    S.shadowFeed!(t, "\e[K")            # erase to end of line in red bg
+    cs = [S.getcell(t.grid, 0, c) for c in 2:9]
+    check("BCE: EL keeps current bg", all(c -> c.bg == 1, cs))
+end
+
+println()
+if isempty(failures)
+    println("ALL SHADOW MODEL CHECKS PASSED")
+    exit(0)
+else
+    println(length(failures), " FAILURE(S):")
+    foreach(f -> println("  - ", f), failures)
+    exit(1)
+end
