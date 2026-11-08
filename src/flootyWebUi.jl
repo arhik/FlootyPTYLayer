@@ -983,6 +983,10 @@ const PDF_INTERACTION_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const AGENT_MONITOR_SELECTOR = Ref{Union{Nothing,Function}}(nothing)
 # The prompt-state DECISION model is a third, independent choice.
 const AGENT_DECISION_SELECTOR = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_STATE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_ADD_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_REMOVE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_TOGGLE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 
 "Install the provider of the app's root chat session id."
 function addChatSessionProvider!(f::Function)
@@ -1100,6 +1104,32 @@ function addAgentModelHooks!(provider::Function, selector::Function,
     monitorSelector === nothing || (AGENT_MONITOR_SELECTOR[] = monitorSelector)
     decisionSelector === nothing || (AGENT_DECISION_SELECTOR[] = decisionSelector)
     return nothing
+end
+
+"""
+    addWorkspaceHooks!(state, add, remove, toggle)
+
+Install the agent's workspace controller. `state(session_id)` returns the
+folder list + summary; `add(session_id, path, name)` adds one; `remove` and
+`toggle` mutate the folder set. All may fail; the panel degrades to empty.
+"""
+function addWorkspaceHooks!(state::Function, add::Function, remove::Function, toggle::Function)
+    WORKSPACE_STATE_HANDLER[] = state
+    WORKSPACE_ADD_HANDLER[] = add
+    WORKSPACE_REMOVE_HANDLER[] = remove
+    WORKSPACE_TOGGLE_HANDLER[] = toggle
+    return nothing
+end
+
+function workspaceInvoke(handler::Ref{Union{Nothing,Function}}, args...)
+    f = handler[]
+    f === nothing && return (success = false, error = "workspace controller not available")
+    try
+        return Base.invokelatest(f, args...)
+    catch err
+        @debug "flootyWebUi: workspace controller failed" exception = err
+        return (success = false, error = sprint(showerror, err))
+    end
 end
 
 """
@@ -2874,6 +2904,191 @@ function installFlootyWindowDelegate!(wv)
     return nothing
 end
 
+const _flootyDragEnteredOriginal = Ref{Ptr{Cvoid}}(C_NULL)
+const _flootyDragUpdatedOriginal = Ref{Ptr{Cvoid}}(C_NULL)
+const _flootyDragExitedOriginal = Ref{Ptr{Cvoid}}(C_NULL)
+const _flootyPerformDropOriginal = Ref{Ptr{Cvoid}}(C_NULL)
+const _flootyDragMskNone = Culong(0)
+const _flootyDragMskCopy = Culong(1)
+
+"Sel wrapper for the drag destination selectors."
+_sel(name::String) = ccall(:sel_registerName, Ptr{Cvoid}, (Cstring,), name)
+
+function _nsString(s::AbstractString)::Ptr{Cvoid}
+    cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "NSString")
+    ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring),
+          cls, _sel("stringWithUTF8String:"), String(s))
+end
+
+function _classArray(object::Ptr{Cvoid})::Ptr{Cvoid}
+    cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "NSArray")
+    ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+          cls, _sel("arrayWithObject:"), object)
+end
+
+function _registerDraggingTypes!(view::Ptr{Cvoid})
+    view == C_NULL && return nothing
+    arr = _classArray(_nsString("public.file-url"))
+    ccall(:objc_msgSend, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+          view, _sel("registerForDraggedTypes:"), arr)
+    return nothing
+end
+
+function _draggingURLs(sender::Ptr{Cvoid})::Vector{String}
+    out = String[]
+    sender == C_NULL && return out
+    try
+        pb = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}),
+                   sender, _sel("draggingPasteboard"))
+        pb == C_NULL && return out
+        nsurlCls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "NSURL")
+        classes = _classArray(nsurlCls)
+        urls = ccall(:objc_msgSend, Ptr{Cvoid},
+                     (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                     pb, _sel("readObjectsForClasses:options:"), classes, C_NULL)
+        urls == C_NULL && return out
+        count = ccall(:objc_msgSend, Culong, (Ptr{Cvoid}, Ptr{Cvoid}),
+                      urls, _sel("count"))
+        for index in 0:count - 1
+            url = ccall(:objc_msgSend, Ptr{Cvoid},
+                        (Ptr{Cvoid}, Ptr{Cvoid}, Culong),
+                        urls, _sel("objectAtIndex:"), Culong(index))
+            url == C_NULL && continue
+            nsString = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}),
+                             url, _sel("path"))
+            nsString == C_NULL && continue
+            cstr = ccall(:objc_msgSend, Ptr{Cchar}, (Ptr{Cvoid}, Ptr{Cvoid}),
+                         nsString, _sel("UTF8String"))
+            cstr == C_NULL && continue
+            path = String(unsafe_string(cstr))
+            isempty(path) && continue
+            push!(out, path)
+        end
+    catch err
+        @debug "flootyWebUi: drag URL read failed" exception = err
+    end
+    return out
+end
+
+function _draggingHasFileURLs(sender::Ptr{Cvoid})::Bool
+    !isempty(_draggingURLs(sender))
+end
+
+function _flootyDraggingEntered(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender::Ptr{Cvoid})
+    if _draggingHasFileURLs(sender)
+        return _flootyDragMskCopy
+    end
+    if _flootyDragEnteredOriginal[] != C_NULL
+        return ccall(_flootyDragEnteredOriginal[], Culong,
+                     (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), _self, _cmd, sender)
+    end
+    return _flootyDragMskNone
+end
+
+function _flootyDraggingUpdated(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender::Ptr{Cvoid})
+    if _draggingHasFileURLs(sender)
+        return _flootyDragMskCopy
+    end
+    if _flootyDragUpdatedOriginal[] != C_NULL
+        return ccall(_flootyDragUpdatedOriginal[], Culong,
+                     (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), _self, _cmd, sender)
+    end
+    return _flootyDragMskNone
+end
+
+function _flootyDraggingExited(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender::Ptr{Cvoid})
+    if _flootyDragExitedOriginal[] != C_NULL
+        ccall(_flootyDragExitedOriginal[], Cvoid,
+              (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), _self, _cmd, sender)
+    end
+    return nothing
+end
+
+function _jitterPathPayload(paths::Vector{String})::String
+    payload = Dict("paths" => paths)
+    return JSON.json(payload)
+end
+
+function _pushWorkspaceDrop!(wv, paths::Vector{String})
+    isempty(paths) && return nothing
+    payload = _jitterPathPayload(paths)
+    script = "window.handleWorkspaceNativeDrop && window.handleWorkspaceNativeDrop(" * payload * ".paths);"
+    try
+        Webviews.dispatch(wv) do
+            try
+                Webviews.eval!(wv, script)
+            catch err
+                @debug "flootyWebUi: native drop push failed" exception = err
+            end
+        end
+    catch err
+        @debug "flootyWebUi: native drop dispatch failed" exception = err
+    end
+    return nothing
+end
+
+function _flootyPerformDragOperation(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender::Ptr{Cvoid})
+    active = try
+        wv = terminalUiWebview[]
+        wv === nothing ? nothing : wv
+    catch
+        nothing
+    end
+    paths = _draggingURLs(sender)
+    if !isempty(paths)
+        active === nothing || _pushWorkspaceDrop!(active, paths)
+        return true
+    end
+    if _flootyPerformDropOriginal[] != C_NULL
+        return ccall(_flootyPerformDropOriginal[], Bool,
+                     (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), _self, _cmd, sender)
+    end
+    return false
+end
+
+"Install native file-url drag handling on the webview's NSView."
+function installWorkspaceNativeDrag!(wv)
+    win = try
+        Webviews.window_handle(wv)::Ptr{Cvoid}
+    catch
+        return nothing
+    end
+    win == C_NULL && return nothing
+    contentView = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}),
+                        win, _sel("contentView"))
+    contentView == C_NULL && return nothing
+    _registerDraggingTypes!(contentView)
+    cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "WKWebView")
+    cls == C_NULL && (cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "NSView"))
+    cls == C_NULL && return nothing
+    methods = (
+        ("draggingEntered:", @cfunction(_flootyDraggingEntered, Culong,
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid})), "L@:@", _flootyDragEnteredOriginal),
+        ("draggingUpdated:", @cfunction(_flootyDraggingUpdated, Culong,
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid})), "L@:@", _flootyDragUpdatedOriginal),
+        ("draggingExited:", @cfunction(_flootyDraggingExited, Cvoid,
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid})), "v@:@", _flootyDragExitedOriginal),
+        ("performDragOperation:", @cfunction(_flootyPerformDragOperation, Bool,
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid})), "B@:@", _flootyPerformDropOriginal)
+    )
+    for (selector, imp, typeSig, slot) in methods
+        sel = _sel(selector)
+        existing = ccall(:class_getInstanceMethod, Ptr{Cvoid},
+                         (Ptr{Cvoid}, Ptr{Cvoid}), cls, sel)
+        if existing == C_NULL
+            ccall(:class_addMethod, Bool, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Cstring),
+                  cls, sel, imp, typeSig)
+            continue
+        end
+        orig = ccall(:method_getImplementation, Ptr{Cvoid}, (Ptr{Cvoid},),
+                     existing)
+        slot[] = orig
+        ccall(:class_replaceMethod, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Cstring),
+              cls, sel, imp, typeSig)
+    end
+    return nothing
+end
+
 """
     openTerminalWindow(url; width=1100, height=750, title="Flooty Terminal")
 
@@ -3612,6 +3827,48 @@ function registerTerminalBindings!(wv)
         tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
         jsonAgentModelState(Base.invokelatest(agentModelState, String(tid)))
     end
+
+    Webviews.bind(wv, "workspaceState") do args
+        payload = try
+            jsonArgs(args)
+        catch
+            nothing
+        end
+        tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
+        JSON.json(workspaceInvoke(WORKSPACE_STATE_HANDLER, String(tid)))
+    end
+    Webviews.bind(wv, "workspaceAddFolder") do args
+        payload = try
+            jsonArgs(args)
+        catch
+            nothing
+        end
+        tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
+        path = payload === nothing ? "" : jsonStr(payload, :path)
+        name = payload === nothing ? "" : jsonStr(payload, :name)
+        JSON.json(workspaceInvoke(WORKSPACE_ADD_HANDLER, String(tid), String(path), String(name)))
+    end
+    Webviews.bind(wv, "workspaceRemoveFolder") do args
+        payload = try
+            jsonArgs(args)
+        catch
+            nothing
+        end
+        tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
+        folder = payload === nothing ? "" : jsonStr(payload, :folder_id)
+        JSON.json(workspaceInvoke(WORKSPACE_REMOVE_HANDLER, String(tid), String(folder)))
+    end
+    Webviews.bind(wv, "workspaceTogglePermission") do args
+        payload = try
+            jsonArgs(args)
+        catch
+            nothing
+        end
+        tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
+        folder = payload === nothing ? "" : jsonStr(payload, :folder_id)
+        permission = payload === nothing ? "" : jsonStr(payload, :permission)
+        JSON.json(workspaceInvoke(WORKSPACE_TOGGLE_HANDLER, String(tid), String(folder), String(permission)))
+    end
     Webviews.bind(wv, "flootySplitCreated") do args
         resp = try
             payload = jsonArgs(args)
@@ -4219,6 +4476,7 @@ function launchTerminalUI(; cmd::Cmd = defaultTerminalCmd(),
                           auto_terminate = true)
     installFlootyWindowDelegate!(wv)
     registerTerminalBindings!(wv)
+    installWorkspaceNativeDrag!(wv)
     Webviews.navigate!(wv, baseUrl * "index.html")
 
     terminalUiWebview[] = wv

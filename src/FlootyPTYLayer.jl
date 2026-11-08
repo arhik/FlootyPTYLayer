@@ -50,7 +50,7 @@ export launchTerminalUI, runTerminalUI, stopTerminalUI,
     addEditorReadHandler!,
     addWorkspaceHandler!,
     closeAllBrowserWindows!, browserWindowInfo, browserWindowOpen,
-    addAgentModelHooks!, agentModelState, setSplitSession!,
+    addAgentModelHooks!, agentModelState, setSplitSession!, addWorkspaceHooks!,
     gpuRendererReport, openTerminalWindow, runTerminalWindow
 
 """
