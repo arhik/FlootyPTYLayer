@@ -971,6 +971,7 @@ const NEW_BROWSER_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_PDF_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const BROWSER_NAV_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const PDF_TOOL_RESULT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const PDF_INTERACTION_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 # Separate controller for the AMBIENT MONITOR's model: the monitor is a different
 # workload (short, frequent, cheap) and deserves its own choice.
 const AGENT_MONITOR_SELECTOR = Ref{Union{Nothing,Function}}(nothing)
@@ -1026,6 +1027,11 @@ function addBrowserNavigateHandler!(f::Function)
 end
 
 "Register `f(session_id, request, tool, result, ok)` for PDF tool results."
+function addPdfInteractionHandler!(f::Function)
+    PDF_INTERACTION_HANDLER[] = f
+    return nothing
+end
+
 function addPdfToolResultHandler!(f::Function)
     PDF_TOOL_RESULT_HANDLER[] = f
     return nothing
@@ -3729,6 +3735,21 @@ function registerTerminalBindings!(wv)
         resp
     end
 
+    Webviews.bind(wv, "flootyPdfInteraction") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = PDF_INTERACTION_HANDLER[]
+            handler === nothing && return jsonOk()
+            Base.invokelatest(handler, jsonStr(payload, :session_id),
+                              jsonStr(payload, :kind), jsonStr(payload, :text))
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootyPdfInteraction failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
     Webviews.bind(wv, "flootyPdfToolResult") do args
         resp = try
             payload = jsonArgs(args)
@@ -3938,13 +3959,13 @@ function startAssetServer!()
             withinAssets = file == rootDir ||
                            startswith(file, rootDir * Base.Filesystem.path_separator)
             (withinAssets && isfile(file)) || return notFound
-            return HTTP.Response(200, ["Content-Type" => mimeFor(file)]; body = read(file))
+            return HTTP.Response(200, ["Content-Type" => mimeFor(file), "Cache-Control" => "no-cache"]; body = read(file))
         end
         file = normpath(assetsDir, lstrip(path, '/'))
         withinAssets = file == assetsDir ||
                        startswith(file, assetsDir * Base.Filesystem.path_separator)
         (withinAssets && isfile(file)) || return notFound
-        return HTTP.Response(200, ["Content-Type" => mimeFor(file)]; body = read(file))
+        return HTTP.Response(200, ["Content-Type" => mimeFor(file), "Cache-Control" => "no-cache"]; body = read(file))
     end
     # With an ephemeral port (0), HTTP's Listener.addr keeps the ORIGINAL port
     # 0 — the really-bound address lives on the inner Base.IOServer socket,

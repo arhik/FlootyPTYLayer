@@ -3596,13 +3596,13 @@
             });
         }
         function pdfRemoveHighlight() {
-            return withPdfApp(function (app) { app.removeHighlight(); });
+            return withPdfApp(function (app) { app.removeHighlight('agent'); });
         }
         function pdfReorder(source, target) {
             return withPdfApp(function (app) { app.reorder(Number(source), Number(target)); });
         }
         function pdfSidebarTab(name) {
-            const mapping = { pages: 'showPages', outline: 'showOutline', notes: 'showNotes' };
+            const mapping = { pages: 'showPages', outline: 'showOutline', clearMarks: 'clearMarks' };
             return withPdfApp(function (app) {
                 const fn = app[mapping[String(name).toLowerCase()]];
                 if (typeof fn === 'function') fn();
@@ -3612,7 +3612,7 @@
             return withPdfApp(function (app) { app.bookmark(); });
         }
         function pdfTool(action) {
-            const mapping = { nextPage: 'nextPage', previousPage: 'previousPage', rotate: 'rotate', zoomIn: 'zoomIn', zoomOut: 'zoomOut', toggleSidebar: 'toggleSidebar', showPages: 'showPages', showOutline: 'showOutline', showNotes: 'showNotes', bookmark: 'bookmark', saveCopy: 'saveCopy', removeHighlight: 'removeHighlight' };
+            const mapping = { nextPage: 'nextPage', previousPage: 'previousPage', rotate: 'rotate', zoomIn: 'zoomIn', zoomOut: 'zoomOut', toggleSidebar: 'toggleSidebar', showPages: 'showPages', showOutline: 'showOutline', bookmark: 'bookmark', saveCopy: 'saveCopy', removeHighlight: 'removeHighlight', clearMarks: 'clearMarks' };
             if (action === 'copyPage') {
                 const app = pdfAppWindow();
                 if (!app || typeof app.getPageText !== 'function') return false;
@@ -3652,7 +3652,7 @@
             match = u.match(/^pdf:(next|previous)-match:$/);
             if (match) return function () { stepPdfMatch(match[1]); };
             if (u === 'pdf:copySelection:') return function () { pdfCopySelection(); };
-            match = u.match(/^pdf:control:(nextPage|previousPage|zoomIn|zoomOut|rotate|copyPage|toggleSidebar|showPages|showOutline|showNotes|bookmark|saveCopy|removeHighlight)$/);
+            match = u.match(/^pdf:control:(nextPage|previousPage|zoomIn|zoomOut|rotate|copyPage|toggleSidebar|showPages|showOutline|bookmark|saveCopy|removeHighlight|clearMarks)$/);
             if (match) return function () { pdfTool(match[1]); };
             match = u.match(/^pdf:note:(.+)$/);
             if (match) return function () { pdfNote(decodeURIComponent(match[1])); };
@@ -3693,7 +3693,7 @@
             const promise = (async function () {
                 switch (action) {
                     case 'goto':
-                        await app.gotoPage(Number(args.page) || 1);
+                        await app.gotoPage(Number(args.page) || 1, 'agent');
                         return String(app.currentPage());
                     case 'nextPage':
                     case 'previousPage':
@@ -3703,12 +3703,13 @@
                     case 'toggleSidebar':
                     case 'showPages':
                     case 'showOutline':
-                    case 'showNotes':
-                        await Promise.resolve(app[action]());
-                        if (action === 'showPages' || action === 'showOutline' || action === 'showNotes') return action;
+                        await Promise.resolve(app[action]('agent'));
                         return String(app.currentPage());
+                    case 'clearMarks':
+                        await Promise.resolve(app.clearMarks('agent'));
+                        return 'cleared';
                     case 'search': {
-                        const matches = await Promise.resolve(app.search(String(args.query || '')));
+                        const matches = await Promise.resolve(app.search(String(args.query || ''), 'agent'));
                         return String(matches ? matches.length : 0);
                     }
                     case 'nextMatch':
@@ -3719,13 +3720,13 @@
                     }
                     case 'copySelection': return String(app.getSelectionText() || '');
                     case 'copyPage': return String(await app.getPageText());
-                    case 'note': await Promise.resolve(app.note(args.text)); return 'note';
-                    case 'highlight': await Promise.resolve(app.highlight(args.color)); return 'highlight';
-                    case 'removeHighlight': await Promise.resolve(app.removeHighlight()); return 'removeHighlight';
+                    case 'note': await Promise.resolve(app.note(args.text, 'agent')); return 'note';
+                    case 'highlight': await Promise.resolve(app.highlight(args.color, '', 'agent')); return 'highlight';
+                    case 'removeHighlight': await Promise.resolve(app.removeHighlight('agent')); return 'removeHighlight';
                     case 'bookmark': await Promise.resolve(app.bookmark()); return 'bookmark';
-                    case 'saveCopy': await Promise.resolve(app.saveCopy()); return 'saved';
+                    case 'saveCopy': await Promise.resolve(app.saveCopy('agent')); return 'saved';
                     case 'clearSearch': await Promise.resolve(app.clearSearch()); return 'cleared';
-                    case 'reorder': await Promise.resolve(app.reorder(Number(args.source) || 1, Number(args.target) || 1)); return 'reordered';
+                    case 'reorder': await Promise.resolve(app.reorder(Number(args.source) || 1, Number(args.target) || 1, 'agent')); return 'reordered';
                     default: throw new Error('unknown tool');
                 }
             })();
@@ -4409,6 +4410,9 @@
                 chatLog.scrollTop += dir * page(chatLog);
                 return;
             }
+            // PDF mode: the viewer handles PageUp/PageDown itself.
+            const pdfPanel = document.getElementById('pdfPanel');
+            if (pdfPanel && !pdfPanel.hidden) return;
             // Terminal focus: xterm scrolls its own scrollback — leave it alone.
             if (t && t.closest && t.closest('.terminal-panel')) return;
             const info = terminals[activeTerminalId];
