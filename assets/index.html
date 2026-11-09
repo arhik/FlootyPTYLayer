@@ -59,10 +59,25 @@
             box-sizing: border-box;
         }
         :root {
-            /* Wallpaper knobs (see #appBackground): the photo is dark by itself,
-               so these two numbers ARE the window's brightness. */
-            --backdrop-gain: 1.7;
-            --backdrop-scrim: 0.15;
+            /* Glass knobs (see #appBackground). The photo sits on <body>;
+               #appBackground veils it with a scrim and blurs it — the classic
+               glassmorphic recipe: heavy blur, dark soft veil, barely-there wall. */
+            --backdrop-blur: 12px;
+            --backdrop-gain: 1;
+            --backdrop-scrim: 0.55;
+            --backdrop-sat: 1.1;
+            --wall-opacity: 1;
+            --ui-opacity: 1;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: url('background.jpg') center/cover no-repeat;
+            opacity: var(--wall-opacity, 1);
+            z-index: -1;
+            pointer-events: none;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -75,41 +90,35 @@
             position: relative;
         }
 
-        /* Wallpaper over the photo — the image must READ, not sit behind a slab.
-           background.jpg is itself dark (mean luminance ~15/255, max ~63), so a
-           flat scrim plus no gain leaves the whole window at ~10/255: that is the
-           "background went dark again" look. The scrim is therefore light (0.15)
-           and the photo is gained up (brightness) — both live in ONE layer so
-           WebKit has a single full-screen backdrop to paint (no backdrop-filter:
-           a separate blur layer repaints on its own schedule, the "drag-resize
-           before it looks right" bug). */
+        /* Glass veil over the photo: a single full-screen layer carrying the
+           scrim AND the blur (backdrop-filter), so WebKit paints one backdrop.
+           Blur is what makes it read as glass rather than a dimmed photo —
+           keep the scrim dark enough that the wall is a hint, not a scene. */
         #appBackground {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            /* TUNABLE: --backdrop-gain lifts the (intrinsically dark) photo,
-               --backdrop-scrim is the black veil on top. Measured window mean
-               luminance: 0.42/1.0 = 10/255 (the "dark again" look),
-               0.15/1.7 = ~42/255. Change ONE number to taste. */
-            background-image: linear-gradient(rgba(0, 0, 0, var(--backdrop-scrim, 0.15)),
-                                              rgba(0, 0, 0, var(--backdrop-scrim, 0.15))),
-                              url('background.jpg');
-            background-size: cover, cover;
-            background-position: center, center;
-            filter: brightness(var(--backdrop-gain, 1.7)) saturate(1.15);
+            background: linear-gradient(rgba(0, 0, 0, var(--backdrop-scrim, 0.55)),
+                                        rgba(0, 0, 0, var(--backdrop-scrim, 0.55)));
+            backdrop-filter: blur(var(--backdrop-blur, 12px))
+                             brightness(var(--backdrop-gain, 1))
+                             saturate(var(--backdrop-sat, 1.1));
+            -webkit-backdrop-filter: blur(var(--backdrop-blur, 12px))
+                                     brightness(var(--backdrop-gain, 1))
+                                     saturate(var(--backdrop-sat, 1.1));
             z-index: -1;
             pointer-events: none;
         }
 
-        /* Film-grain noise overlay (SVG turbulence filter) */
+        /* Film-grain noise overlay (SVG turbulence filter). Lives INSIDE
+           #appBackground so the grain rides the wallpaper only — never the UI. */
         #grain {
-            position: fixed;
+            position: absolute;
             top: 0; left: 0;
             width: 100%; height: 100%;
             filter: url(#noise);
             opacity: 0.05;
             pointer-events: none;
-            z-index: 99998;
         }
 
         /* Agent feedback popups --------------------------------------------- */
@@ -130,7 +139,7 @@
             align-items: flex-start;
             gap: 10px;
             padding: 10px 12px;
-            background: rgba(20, 21, 26, 0.92);
+            background: rgba(20, 21, 26, calc(0.92 * var(--ui-opacity, 1)));
             border: 1px solid rgba(255, 255, 255, 0.14);
             color: rgba(255, 255, 255, 0.92);
             font-size: 12px;
@@ -317,13 +326,71 @@
             padding: 8px;
             border: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: 8px;
-            background: rgba(18, 19, 24, 0.96);
+            background: rgba(18, 19, 24, calc(0.96 * var(--ui-opacity, 1)));
             box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
             overflow: auto;
         }
         .child-tabs.tree-map-open { display: flex; }
         .child-tabs:empty { display: none; }
         .root-icon.tree-map-btn { color: rgba(255, 255, 255, 0.45); font-size: 14px; }
+        .settings-btn { margin-top: auto; font-size: 15px; color: rgba(255, 255, 255, 0.45); }
+
+        /* Settings panel --------------------------------------------------- */
+        .settings-panel {
+            position: fixed;
+            inset: 0;
+            z-index: 95000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.45);
+        }
+        .settings-panel[hidden] { display: none; }
+        .settings-card {
+            width: 380px;
+            max-width: calc(100vw - 40px);
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: rgba(28, 28, 34, calc(0.92 * var(--ui-opacity, 1)));
+            backdrop-filter: blur(20px) saturate(160%);
+            -webkit-backdrop-filter: blur(20px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 12px;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+        }
+        .settings-panel-title {
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.45);
+        }
+        .settings-row { display: flex; flex-direction: column; gap: 6px; }
+        .settings-row label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .settings-value { color: rgba(255, 255, 255, 0.55); font-family: Menlo, Consolas, monospace; }
+        .settings-row input[type="range"] { width: 100%; accent-color: #b18cff; }
+        .settings-actions { display: flex; gap: 8px; margin-top: 4px; }
+        .settings-actions button {
+            flex: 1;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 5px;
+            color: rgba(255, 255, 255, 0.85);
+            font: inherit;
+            font-size: 12px;
+            padding: 8px 10px;
+            cursor: pointer;
+        }
+        .settings-actions button:hover {
+            border-color: rgba(177, 140, 255, 0.7);
+            color: #fff;
+        }
         .child-strip {
             display: flex;
             align-items: center;
@@ -468,7 +535,7 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-            background: rgba(28, 28, 34, 0.98);
+            background: rgba(28, 28, 34, calc(0.98 * var(--ui-opacity, 1)));
             border: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: 8px;
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
@@ -547,6 +614,7 @@
             text-transform: uppercase;
             color: rgba(255, 255, 255, 0.45);
         }
+        .session-wheel-item[hidden] { display: none; }
         .session-wheel-item {
             position: absolute;
             width: 54px;
@@ -558,7 +626,7 @@
             justify-content: center;
             gap: 1px;
             pointer-events: auto;
-            background: rgba(28, 28, 34, 0.98);
+            background: rgba(28, 28, 34, calc(0.98 * var(--ui-opacity, 1)));
             border: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: 50%;
             color: rgba(255, 255, 255, 0.85);
@@ -961,6 +1029,17 @@
             border: 0;
             background: #fff;
         }
+        #pdfPanel {
+            flex: 1;
+            min-width: 0;
+            display: none;
+            overflow: hidden;
+            background: rgba(20, 21, 26, 0.62);
+        }
+        .workspace.pdf-focus #terminal-container,
+        .workspace.pdf-focus #chatResizer { display: none; }
+        .workspace.pdf-focus #pdfPanel { display: flex; }
+        #pdfLayerHost { width: 100%; height: 100%; }
         .browser-native-note {
             flex: none;
             font: 10px Menlo, Consolas, monospace;
@@ -1006,7 +1085,7 @@
             position: relative;
             z-index: 2;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(20, 21, 26, 0.55);
+            background: rgba(20, 21, 26, calc(0.55 * var(--ui-opacity, 1)));
         }
         /* Live model/phase line: its own row inside the footer, directly above
            the input block. Replaced in place and cleared when the call returns. */
@@ -1433,6 +1512,23 @@
                 </svg>
                 <span class="session-label">Browser</span>
             </button>
+            <button type="button" class="session-wheel-item" data-session-kind="pdf"
+                    title="PDF session" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 3h9l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path>
+                    <path d="M14 3v5h5"></path>
+                    <path d="M9 13h6M9 17h6M9 9h2"></path>
+                </svg>
+                <span class="session-label">PDF</span>
+            </button>
+            <button type="button" class="session-wheel-item" data-session-kind="settings"
+                    title="Settings" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3.2"/>
+                    <path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2M5.3 5.3l2.3 2.3M16.4 16.4l2.3 2.3M18.7 5.3l-2.3 2.3M7.6 16.4l-2.3 2.3"/>
+                </svg>
+                <span class="session-label">Settings</span>
+            </button>
             <button type="button" class="session-wheel-item" data-session-kind="cancel"
                     title="Cancel" role="menuitem">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1458,8 +1554,46 @@
         </div>
     </div>
 
-    <div id="appBackground"></div>
-    <div id="grain"></div>
+    <div id="appBackground"><div id="grain"></div></div>
+
+    <!-- UI settings: wallpaper + film grain, persisted to ~/.flooty/settings.json -->
+    <div id="settingsPanel" class="settings-panel" hidden>
+        <div class="settings-card" role="dialog" aria-label="Settings">
+            <div class="settings-panel-title">Settings</div>
+            <div class="settings-row">
+                <label for="setBlur">Background blur <span class="settings-value" id="setBlurVal">12px</span></label>
+                <input type="range" id="setBlur" min="0" max="30" step="1" value="12">
+            </div>
+            <div class="settings-row">
+                <label for="setGain">Wallpaper brightness <span class="settings-value" id="setGainVal">1.00</span></label>
+                <input type="range" id="setGain" min="0.5" max="3" step="0.05" value="1">
+            </div>
+            <div class="settings-row">
+                <label for="setScrim">Wallpaper scrim <span class="settings-value" id="setScrimVal">0.55</span></label>
+                <input type="range" id="setScrim" min="0" max="0.85" step="0.01" value="0.55">
+            </div>
+            <div class="settings-row">
+                <label for="setSaturation">Wallpaper saturation <span class="settings-value" id="setSaturationVal">1.10</span></label>
+                <input type="range" id="setSaturation" min="0" max="2" step="0.05" value="1.1">
+            </div>
+            <div class="settings-row">
+                <label for="setWallOpacity">Wallpaper opacity <span class="settings-value" id="setWallOpacityVal">1.00</span></label>
+                <input type="range" id="setWallOpacity" min="0" max="1" step="0.05" value="1">
+            </div>
+            <div class="settings-row">
+                <label for="setUiOpacity">UI opacity <span class="settings-value" id="setUiOpacityVal">1.00</span></label>
+                <input type="range" id="setUiOpacity" min="0.3" max="1" step="0.05" value="1">
+            </div>
+            <div class="settings-row">
+                <label for="setGrain">Film grain <span class="settings-value" id="setGrainVal">0.05</span></label>
+                <input type="range" id="setGrain" min="0" max="0.3" step="0.01" value="0.05">
+            </div>
+            <div class="settings-actions">
+                <button type="button" id="settingsReset">Reset to defaults</button>
+                <button type="button" id="settingsClose">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Workspace: VERTICAL tab rail + terminal pane -->
     <!-- Boots CHAT-ONLY: nothing to prompt about until a terminal is asked for
@@ -1480,13 +1614,12 @@
                         <button type="button" id="browserGo" title="Open the URL">Go</button>
                         <input id="browserUrl" type="text" spellcheck="false"
                                placeholder="https://…">
-                        <span class="browser-native-note"
-                              title="Sites that refuse embedding (GitHub, Google…) open in a separate native window.">native</span>
-                        <button type="button" id="browserExternal"
-                                title="Open in the system browser">Open</button>
                     </div>
                     <iframe id="browserFrame" title="Browser session"
                             sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+                </div>
+                <div id="pdfPanel" class="pdf-panel" hidden>
+                    <div id="pdfLayerHost"></div>
                 </div>
 
                 <!-- Activity rail — the per-session agent conversation. -->
@@ -1551,6 +1684,8 @@
                         title="Model for this tab's prompt-state DECISIONS (separate from the driver and monitor).">
                 </select>
             </div>
+            <button id="sessionBtn" title="New session (sibling of the current one)"
+                    style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">+ session</button>
             <button id="splitBtn" title="Split the pane: Alt+D vertical (side by side), Alt+Shift+D horizontal (stacked)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">split</button>
             <div id="ownershipPill" class="owner-user" style="display:none"
@@ -2604,6 +2739,16 @@
                 toggleTreeMap();
             };
             rail.appendChild(mapBtn);
+            const settingsBtn = document.createElement('div');
+            settingsBtn.className = 'root-icon settings-btn';
+            settingsBtn.id = 'settingsBtn';
+            settingsBtn.title = 'Settings (Ctrl+,)';
+            settingsBtn.textContent = '⚙';
+            settingsBtn.onclick = function (e) {
+                e.stopPropagation();
+                toggleSettingsPanel();
+            };
+            rail.appendChild(settingsBtn);
             return undefined;
         }
 
@@ -2730,6 +2875,7 @@
             const _ws = document.querySelector('.workspace');
             _ws && _ws.classList.remove('chat-focus');
             _ws && _ws.classList.remove('browser-focus');
+            deactivatePdfPane();
             document.querySelectorAll('.chat-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -3307,6 +3453,7 @@
             activeSplitId = null;
             const ws = document.querySelector('.workspace');
             ws && ws.classList.remove('browser-focus');
+            deactivatePdfPane();
             ws && ws.classList.add('chat-focus');
             document.querySelectorAll('.terminal-tab').forEach(t => t.classList.remove('active'));
             const tab = document.getElementById('chat-tab-' + id);
@@ -3347,6 +3494,18 @@
         };
 
         // ---- browser tabs ---------------------------------------------------
+        function deactivatePdfPane() {
+            if (window.pdfLayer && typeof window.pdfLayer.unmount === 'function') {
+                window.pdfLayer.unmount();
+            }
+            const ws = document.querySelector('.workspace');
+            if (ws) ws.classList.remove('pdf-focus');
+            const pdfPanel = document.getElementById('pdfPanel');
+            const browserPanel = document.getElementById('browserPanel');
+            if (pdfPanel) pdfPanel.hidden = true;
+            if (browserPanel) browserPanel.hidden = true;
+        }
+
         function activateBrowserTab(id) {
             const info = browserTabs[id];
             if (!info) return;
@@ -3357,13 +3516,27 @@
             activeSplitId = null;
             const ws = document.querySelector('.workspace');
             ws && ws.classList.remove('chat-focus');
-            ws && ws.classList.add('browser-focus');
-            const panel = document.getElementById('browserPanel');
-            if (panel) panel.hidden = false;
-            const frame = document.getElementById('browserFrame');
-            if (frame) frame.src = info.url || 'about:blank';
-            const input = document.getElementById('browserUrl');
-            if (input) input.value = info.url || '';
+            ws && ws.classList.remove('browser-focus');
+            ws && ws.classList.remove('pdf-focus');
+            if (window.pdfLayer && typeof window.pdfLayer.unmount === 'function') window.pdfLayer.unmount();
+            const isPdf = String(info.url || '').includes('/viewer/');
+            ws && ws.classList.add(isPdf ? 'pdf-focus' : 'browser-focus');
+            const pdfPanel = document.getElementById('pdfPanel');
+            const browserPanel = document.getElementById('browserPanel');
+            if (isPdf) {
+                if (pdfPanel) pdfPanel.hidden = false;
+                if (browserPanel) browserPanel.hidden = true;
+                if (window.pdfLayer && typeof window.pdfLayer.mount === 'function') {
+                    window.pdfLayer.mount(id);
+                }
+            } else {
+                if (pdfPanel) pdfPanel.hidden = true;
+                if (browserPanel) browserPanel.hidden = false;
+                const frame = document.getElementById('browserFrame');
+                if (frame) frame.src = info.url || 'about:blank';
+                const input = document.getElementById('browserUrl');
+                if (input) input.value = info.url || '';
+            }
             renderChatStreamTabs(info);
             chatRenderedFor = null;
             renderActiveAgentChat();
@@ -3378,6 +3551,7 @@
             const id = activeBrowserId;
             const info = browserTabs[id];
             if (!info) return;
+            if (handlePdfNavigation(info, url, true)) return;
             info.url = url;
             const frame = document.getElementById('browserFrame');
             if (frame) frame.src = url;
@@ -3386,6 +3560,180 @@
             callJulia('flootyBrowserNavigate', JSON.stringify({
                 session_id: id, url: url
             })).catch(function () {});
+        }
+
+        function pdfAppWindow() {
+            try {
+                return window.pdfLayer && typeof window.pdfLayer.api === 'function'
+                    ? window.pdfLayer.api() : null;
+            } catch (e) { return null; }
+        }
+        function withPdfApp(fn) {
+            const app = pdfAppWindow();
+            if (!app) return false;
+            try { fn(app); return true; } catch (e) { return false; }
+        }
+        function copyPdfText(text) {
+            text = String(text || '');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(function () {});
+                return true;
+            }
+            return false;
+        }
+        function gotoFolioPage(page) {
+            return withPdfApp(function (app) { app.gotoPage(Number(page)); });
+        }
+        function pdfHighlightColor(hex) {
+            return withPdfApp(function (app) { app.highlight(String(hex)); });
+        }
+        function pdfFind(query) {
+            return withPdfApp(function (app) { app.search(String(query)); });
+        }
+        function stepPdfMatch(direction) {
+            return withPdfApp(function (app) {
+                if (direction === 'previous') app.previousMatch(); else app.nextMatch();
+            });
+        }
+        function pdfRemoveHighlight() {
+            return withPdfApp(function (app) { app.removeHighlight(); });
+        }
+        function pdfReorder(source, target) {
+            return withPdfApp(function (app) { app.reorder(Number(source), Number(target)); });
+        }
+        function pdfSidebarTab(name) {
+            const mapping = { pages: 'showPages', outline: 'showOutline', notes: 'showNotes' };
+            return withPdfApp(function (app) {
+                const fn = app[mapping[String(name).toLowerCase()]];
+                if (typeof fn === 'function') fn();
+            });
+        }
+        function pdfBookmarkCurrent() {
+            return withPdfApp(function (app) { app.bookmark(); });
+        }
+        function pdfTool(action) {
+            const mapping = { nextPage: 'nextPage', previousPage: 'previousPage', rotate: 'rotate', zoomIn: 'zoomIn', zoomOut: 'zoomOut', toggleSidebar: 'toggleSidebar', showPages: 'showPages', showOutline: 'showOutline', showNotes: 'showNotes', bookmark: 'bookmark', saveCopy: 'saveCopy', removeHighlight: 'removeHighlight' };
+            if (action === 'copyPage') {
+                const app = pdfAppWindow();
+                if (!app || typeof app.getPageText !== 'function') return false;
+                Promise.resolve(app.getPageText()).then(copyPdfText).catch(function () {});
+                return true;
+            }
+            return withPdfApp(function (app) {
+                const fn = app[mapping[action]];
+                if (typeof fn === 'function') fn();
+            });
+        }
+        function pdfNote(text) {
+            return withPdfApp(function (app) { app.note(String(text)); });
+        }
+        function pdfCopyCurrentPage() {
+            const app = pdfAppWindow();
+            if (!app || typeof app.getPageText !== 'function') return false;
+            Promise.resolve(app.getPageText()).then(copyPdfText).catch(function () {});
+            return true;
+        }
+        function pdfCopySelection() {
+            const app = pdfAppWindow();
+            if (!app || typeof app.getSelectionText !== 'function') return false;
+            return copyPdfText(app.getSelectionText());
+        }
+        function pdfActionForUrl(url) {
+            const u = String(url || '');
+            let match = u.match(/^pdf:page:(\d+)$/);
+            if (match) return function () { gotoFolioPage(Number(match[1])); };
+            match = u.match(/^pdf:highlight:(#?[0-9A-Fa-f]{6})$/);
+            if (match) {
+                const color = match[1].startsWith('#') ? match[1] : '#' + match[1];
+                return function () { pdfHighlightColor(color); };
+            }
+            match = u.match(/^pdf:search:(.+)$/);
+            if (match) return function () { pdfFind(decodeURIComponent(match[1])); };
+            match = u.match(/^pdf:(next|previous)-match:$/);
+            if (match) return function () { stepPdfMatch(match[1]); };
+            if (u === 'pdf:copySelection:') return function () { pdfCopySelection(); };
+            match = u.match(/^pdf:control:(nextPage|previousPage|zoomIn|zoomOut|rotate|copyPage|toggleSidebar|showPages|showOutline|showNotes|bookmark|saveCopy|removeHighlight)$/);
+            if (match) return function () { pdfTool(match[1]); };
+            match = u.match(/^pdf:note:(.+)$/);
+            if (match) return function () { pdfNote(decodeURIComponent(match[1])); };
+            match = u.match(/^pdf:reorder:(\d+):(\d+)$/);
+            if (match) return function () { pdfReorder(Number(match[1]), Number(match[2])); };
+            return null;
+        }
+        function handlePdfNavigation(info, url, active) {
+            if (handlePdfToolRequest(info, url, active)) return true;
+            const action = pdfActionForUrl(url);
+            if (!action) return false;
+            info.url = info.url || '/viewer/index.html';
+            if (active) {
+                action();
+                const input = document.getElementById('browserUrl');
+                if (input) input.value = '';
+            }
+            return true;
+        }
+
+        function handlePdfToolRequest(info, url, active) {
+            const match = String(url || '').match(/^pdf:tool:([^:]+):(.*)$/);
+            if (!match) return false;
+            const requestId = match[1];
+            let payload;
+            try { payload = JSON.parse(decodeURIComponent(match[2])); } catch (e) { payload = null; }
+            const respond = function (result, ok) {
+                callJulia('flootyPdfToolResult', JSON.stringify({
+                    session_id: info.juliaId || activeBrowserId || '', request: requestId,
+                    tool: payload && payload.tool || 'unknown',
+                    result: String(result || ''), ok: !!ok
+                })).catch(function () {});
+            };
+            const app = pdfAppWindow();
+            if (!app || !payload) { respond('no pdf session', false); return true; }
+            const action = payload.tool;
+            const args = payload.args || {};
+            const promise = (async function () {
+                switch (action) {
+                    case 'goto':
+                        await app.gotoPage(Number(args.page) || 1);
+                        return String(app.currentPage());
+                    case 'nextPage':
+                    case 'previousPage':
+                    case 'zoomIn':
+                    case 'zoomOut':
+                    case 'rotate':
+                    case 'toggleSidebar':
+                    case 'showPages':
+                    case 'showOutline':
+                    case 'showNotes':
+                        await Promise.resolve(app[action]());
+                        if (action === 'showPages' || action === 'showOutline' || action === 'showNotes') return action;
+                        return String(app.currentPage());
+                    case 'search': {
+                        const matches = await Promise.resolve(app.search(String(args.query || '')));
+                        return String(matches ? matches.length : 0);
+                    }
+                    case 'nextMatch':
+                    case 'previousMatch': {
+                        const fn = action === 'nextMatch' ? app.nextMatch : app.previousMatch;
+                        await Promise.resolve(fn.call(app));
+                        return 'done';
+                    }
+                    case 'copySelection': return String(app.getSelectionText() || '');
+                    case 'copyPage': return String(await app.getPageText());
+                    case 'note': await Promise.resolve(app.note(args.text)); return 'note';
+                    case 'highlight': await Promise.resolve(app.highlight(args.color)); return 'highlight';
+                    case 'removeHighlight': await Promise.resolve(app.removeHighlight()); return 'removeHighlight';
+                    case 'bookmark': await Promise.resolve(app.bookmark()); return 'bookmark';
+                    case 'saveCopy': await Promise.resolve(app.saveCopy()); return 'saved';
+                    case 'clearSearch': await Promise.resolve(app.clearSearch()); return 'cleared';
+                    case 'reorder': await Promise.resolve(app.reorder(Number(args.source) || 1, Number(args.target) || 1)); return 'reordered';
+                    default: throw new Error('unknown tool');
+                }
+            })();
+            promise.then(function (result) { respond(result, true); },
+                          function (error) { respond(String(error && error.message || error), false); });
+            const input = document.getElementById('browserUrl');
+            if (input) input.value = '';
+            return true;
         }
 
         window.flootyAddBrowserTab = function (id, name, url, rootId, parentId) {
@@ -3810,7 +4158,9 @@
             browserNavigate: (sessionId, ev) => {
                 const info = browserTabs[sessionId];
                 if (!info) return;
-                info.url = String(ev.url || '');
+                const url = String(ev.url || '');
+                if (handlePdfNavigation(info, url, sessionId === activeBrowserId)) return;
+                info.url = url;
                 if (activeBrowserId === sessionId) {
                     const frame = document.getElementById('browserFrame');
                     if (frame) frame.src = info.url;
@@ -4130,7 +4480,8 @@
       // agent, not to whichever session is globally active.
       terminal_session_id: focusedSessionId(),
       session_id: activeBrowserId || activeChatId ||
-          ((!activeTerminalId || !terminals[activeTerminalId]) ? CHAT_SESSION_ID : null)
+          ((!activeTerminalId || !terminals[activeTerminalId]) ? CHAT_SESSION_ID : null),
+      pdf_selection: liveSelectionText()
   }))
     .then(r => { if (!(r && r.success)) { try { window.flootyDebug && window.flootyDebug(
                         'assistSubmit FAILED: ' + JSON.stringify(r)); } catch (e) {} } })
@@ -4211,6 +4562,13 @@
         // whenever it changes: the document's selection first, else the active
         // terminal's (xterm keeps its own).
         function liveSelectionText() {
+            const info = activeBrowserId ? browserTabs[activeBrowserId] : null;
+            if (info && String(info.url || '').includes('/viewer/')) {
+                const app = pdfAppWindow();
+                const pdfText = app && typeof app.getSelectionText === 'function'
+                    ? String(app.getSelectionText() || '') : '';
+                if (pdfText) return pdfText;
+            }
             const sel = window.getSelection();
             const docText = sel ? sel.toString() : '';
             if (docText) return docText;
@@ -5031,6 +5389,11 @@
             fitVisiblePanes();
         }
         // Split / close-split: ONE button that reflects the current state.
+        (function installSessionButton() {
+            const btn = document.getElementById('sessionBtn');
+            if (btn) btn.addEventListener('click', () => openSessionChooser('sibling'));
+        })();
+
         (function installSplitButton() {
             const btn = document.getElementById('splitBtn');
             if (!btn) return;
@@ -5119,6 +5482,113 @@
                 }, 0);
             });
         }
+
+        // ---- UI settings (wallpaper / grain), persisted via Julia bindings --
+        // File-backed under ~/.flooty/settings.json (flootySettingsLoad/Save).
+        const SETTINGS_DEFAULTS = { blur: 12, gain: 1, scrim: 0.55, saturation: 1.1, wallOpacity: 1, uiOpacity: 1, grain: 0.05 };
+        const SETTINGS_FIELDS = [
+            ['setBlur', 'blur', 0],
+            ['setGain', 'gain', 2],
+            ['setScrim', 'scrim', 2],
+            ['setSaturation', 'saturation', 2],
+            ['setWallOpacity', 'wallOpacity', 2],
+            ['setUiOpacity', 'uiOpacity', 2],
+            ['setGrain', 'grain', 2],
+        ];
+        let currentSettings = Object.assign({}, SETTINGS_DEFAULTS);
+
+        function applySettings(s) {
+            const root = document.documentElement;
+            root.style.setProperty('--backdrop-blur', String(s.blur) + 'px');
+            root.style.setProperty('--backdrop-gain', String(s.gain));
+            root.style.setProperty('--backdrop-scrim', String(s.scrim));
+            root.style.setProperty('--backdrop-sat', String(s.saturation));
+            root.style.setProperty('--wall-opacity', String(s.wallOpacity));
+            root.style.setProperty('--ui-opacity', String(s.uiOpacity));
+            const grain = document.getElementById('grain');
+            if (grain) grain.style.opacity = String(s.grain);
+        }
+
+        function settingsLabel(key, v, digits) {
+            return Number(v).toFixed(digits) + (key === 'blur' ? 'px' : '');
+        }
+
+        function syncSettingsPanel() {
+            for (const [id, key, digits] of SETTINGS_FIELDS) {
+                const input = document.getElementById(id);
+                const label = document.getElementById(id + 'Val');
+                if (input) input.value = currentSettings[key];
+                if (label) label.textContent = settingsLabel(key, currentSettings[key], digits);
+            }
+        }
+
+        function saveUiSettings() {
+            return callJulia('flootySettingsSave',
+                JSON.stringify({ settings: currentSettings }))
+                .catch(function (err) {
+                    try { window.flootyDebug && window.flootyDebug('settings save FAILED: ' + err); } catch (_e) {}
+                });
+        }
+
+        function toggleSettingsPanel(show) {
+            const panel = document.getElementById('settingsPanel');
+            if (!panel) return;
+            const want = typeof show === 'boolean' ? show : panel.hidden;
+            panel.hidden = !want;
+        }
+        window.toggleSettingsPanel = toggleSettingsPanel;
+
+        function loadUiSettings() {
+            return callJulia('flootySettingsLoad', '{}').then(function (result) {
+                if (result && result.success && result.settings &&
+                    typeof result.settings === 'object') {
+                    currentSettings = Object.assign({}, SETTINGS_DEFAULTS, result.settings);
+                }
+                applySettings(currentSettings);
+                syncSettingsPanel();
+            }).catch(function () {
+                applySettings(currentSettings);
+                syncSettingsPanel();
+            });
+        }
+
+        (function installSettingsPanel() {
+            const panel = document.getElementById('settingsPanel');
+            if (!panel) return;
+            panel.addEventListener('click', function (e) {
+                if (e.target === panel) toggleSettingsPanel(false);
+            });
+            for (const [id, key, digits] of SETTINGS_FIELDS) {
+                const input = document.getElementById(id);
+                if (!input) continue;
+                input.addEventListener('input', function () {
+                    const v = parseFloat(input.value);
+                    if (!isFinite(v)) return;
+                    currentSettings[key] = v;
+                    const label = document.getElementById(id + 'Val');
+                    if (label) label.textContent = settingsLabel(key, v, digits);
+                    applySettings(currentSettings);
+                });
+                input.addEventListener('change', saveUiSettings);
+            }
+            document.getElementById('settingsReset').addEventListener('click', function () {
+                currentSettings = Object.assign({}, SETTINGS_DEFAULTS);
+                applySettings(currentSettings);
+                syncSettingsPanel();
+                saveUiSettings();
+            });
+            document.getElementById('settingsClose').addEventListener('click', function () {
+                toggleSettingsPanel(false);
+            });
+            document.addEventListener('keydown', function (e) {
+                if (!panel.hidden && e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleSettingsPanel(false);
+                }
+            }, true);
+            loadUiSettings();
+        })();
 
         // ---- session-type chooser (radial) --------------------------------
         let sessionChooserMode = 'child';
@@ -5214,6 +5684,12 @@
                     });
                 return;
             }
+            if (kind === 'pdf') {
+                callJulia('flootyNewPdfSession', JSON.stringify({
+                    parent_id: parentSid, path: '/viewer/index.html', name: 'PDF'
+                })).catch(function () {});
+                return;
+            }
             let parentId = null;
             if (activeTerminalId && terminals[activeTerminalId]) {
                 // A split child selected in the tree is a valid NESTED parent.
@@ -5272,6 +5748,10 @@
                                 parent_id: '', url: url || 'about:blank', name: 'browser'
                             })).catch(function () {});
                         });
+                } else if (kind === 'pdf') {
+                    callJulia('flootyNewPdfSession', JSON.stringify({
+                        parent_id: '', path: '/viewer/index.html', name: 'PDF'
+                    })).catch(function () {});
                 }
             };
             if (!parent) {
@@ -5295,6 +5775,12 @@
                     });
                 return;
             }
+            if (kind === 'pdf') {
+                callJulia('flootyNewPdfSession', JSON.stringify({
+                    parent_id: parent, path: '/viewer/index.html', name: 'PDF'
+                })).catch(function () {});
+                return;
+            }
             // Terminal/SSH sibling: if the parent is a pane, add it as another
             // split child; otherwise create the child session (tree map).
             let parentTab = null;
@@ -5316,6 +5802,7 @@
             const mode = sessionChooserMode;
             closeSessionChooser();
             if (kind === 'cancel') return;
+            if (kind === 'settings') { toggleSettingsPanel(true); return; }
             if (mode === 'split') {
                 if (kind === 'ssh') {
                     flootyPrompt('SSH target (user@host)', 'user@host', sshTargetHistory()[0] || '', sshTargetHistory())
@@ -5353,6 +5840,10 @@
                                 parent_id: '', url: url || 'about:blank', name: 'browser'
                             })).catch(function () {});
                         });
+                } else if (kind === 'pdf') {
+                    callJulia('flootyNewPdfSession', JSON.stringify({
+                        parent_id: '', path: '/viewer/index.html', name: 'PDF'
+                    })).catch(function () {});
                 } else if (kind === 'ssh') {
                     flootyPrompt('SSH target (user@host)', 'user@host', sshTargetHistory()[0] || '', sshTargetHistory())
                         .then(function (target) {
@@ -5378,6 +5869,10 @@
                             parent_id: parentSid, url: url || 'about:blank', name: 'browser'
                         })).catch(function () {});
                     });
+            } else if (kind === 'pdf') {
+                callJulia('flootyNewPdfSession', JSON.stringify({
+                    parent_id: parentSid, path: '/viewer/index.html', name: 'PDF'
+                })).catch(function () {});
             } else if (kind === 'ssh') {
                 flootyPrompt('SSH target (user@host)', 'user@host', sshTargetHistory()[0] || '', sshTargetHistory())
                     .then(function (target) {
@@ -5403,7 +5898,6 @@
         (function installBrowserBar() {
             const go = document.getElementById('browserGo');
             const input = document.getElementById('browserUrl');
-            const ext = document.getElementById('browserExternal');
             if (go) go.addEventListener('click', function () {
                 const url = (input && input.value || '').trim();
                 if (url) browserNavigateActive(url);
@@ -5413,10 +5907,6 @@
                     const url = String(input.value || '').trim();
                     if (url) browserNavigateActive(url);
                 }
-            });
-            if (ext) ext.addEventListener('click', function () {
-                const info = browserTabs[activeBrowserId];
-                if (info && info.url) window.open(info.url, '_blank');
             });
         })();
 
@@ -5462,6 +5952,11 @@
         }, true);
 
         document.addEventListener('keydown', (e) => {
+            // Ctrl+, / Cmd+,: toggle the settings pane.
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === ',') {
+                e.preventDefault();
+                toggleSettingsPanel();
+            }
             // Ctrl+Shift+T: spawn a SIBLING child of the current arena parent
             // (virtual parent = first terminal when none exists yet).
             if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't')) {
@@ -5488,6 +5983,11 @@
             }
 
         });
+    </script>
+
+    <script type="module">
+        import { mountPdfLayer } from '/viewer/layer.mjs';
+        window.pdfLayer = mountPdfLayer(document.getElementById('pdfLayerHost'));
     </script>
 
     <script type="module">

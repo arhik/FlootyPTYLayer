@@ -153,7 +153,16 @@ end
 Navigate the native window, recreating it if the user closed it. Falls back to
 opening when no window is registered yet.
 """
+const NATIVE_BROWSER_SCHEMES = ("http://", "https://", "file://")
+
+function canOpenNativeBrowser(url::AbstractString)::Bool
+    normalized = lowercase(strip(String(url)))
+    any(scheme -> startswith(normalized, scheme), NATIVE_BROWSER_SCHEMES) || return false
+    !contains(normalized, "/viewer/")
+end
+
 function navigateBrowserWindow!(id::AbstractString, url::AbstractString)::Bool
+    canOpenNativeBrowser(url) || return false
     @static if Sys.isapple()
         key = String(id)
         bw = lock(() -> get(BROWSER_WINDOWS, key, nothing), BROWSER_WINDOWS_LOCK)

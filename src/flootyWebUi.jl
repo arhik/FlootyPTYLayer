@@ -968,7 +968,9 @@ const CHAT_INTERACTION_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_CHAT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const CHAT_CLOSE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_BROWSER_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const NEW_PDF_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const BROWSER_NAV_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const PDF_TOOL_RESULT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 # Separate controller for the AMBIENT MONITOR's model: the monitor is a different
 # workload (short, frequent, cheap) and deserves its own choice.
 const AGENT_MONITOR_SELECTOR = Ref{Union{Nothing,Function}}(nothing)
@@ -1011,9 +1013,21 @@ function addNewBrowserHandler!(f::Function)
     return nothing
 end
 
+"Register `f(parent_id, path, name)` to create a PDFSession."
+function addNewPdfHandler!(f::Function)
+    NEW_PDF_HANDLER[] = f
+    return nothing
+end
+
 "Register `f(session_id, url)` to sync a user-typed browser URL."
 function addBrowserNavigateHandler!(f::Function)
     BROWSER_NAV_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(session_id, request, tool, result, ok)` for PDF tool results."
+function addPdfToolResultHandler!(f::Function)
+    PDF_TOOL_RESULT_HANDLER[] = f
     return nothing
 end
 
@@ -3364,7 +3378,7 @@ function registerTerminalBindings!(wv)
             if handler !== nothing
                 try
                     Base.invokelatest(handler, wv, String(text),
-                                      jsonStr(payload, :tab), String(chat_sid))
+                                      jsonStr(payload, :tab), String(chat_sid), String(jsonStr(payload, :pdf_selection)))
                     return jsonOk()
                 catch err
                     @error "flootyWebUi: chat session handler failed" exception = err
@@ -3379,7 +3393,7 @@ function registerTerminalBindings!(wv)
             if handler !== nothing
                 try
                     Base.invokelatest(handler, wv, String(text),
-                                      jsonStr(payload, :tab), String(chat_sid))
+                                      jsonStr(payload, :tab), String(chat_sid), String(jsonStr(payload, :pdf_selection)))
                     return jsonOk()
                 catch err
                     @error "flootyWebUi: chat-only handler failed" exception = err
@@ -3700,6 +3714,40 @@ function registerTerminalBindings!(wv)
         resp
     end
 
+    Webviews.bind(wv, "flootyNewPdfSession") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = NEW_PDF_HANDLER[]
+            handler === nothing && return errorJson("no PDF spawner installed")
+            Base.invokelatest(handler, jsonStr(payload, :parent_id),
+                              jsonStr(payload, :path), jsonStr(payload, :name))
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootyNewPdfSession failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootyPdfToolResult") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = PDF_TOOL_RESULT_HANDLER[]
+            handler === nothing && return errorJson("no PDF tool result handler installed")
+            Base.invokelatest(handler,
+                              jsonStr(payload, :session_id),
+                              jsonStr(payload, :request),
+                              jsonStr(payload, :tool),
+                              jsonStr(payload, :result),
+                              jsonBool(payload, :ok, true))
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootyPdfToolResult failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
     Webviews.bind(wv, "flootyBrowserNavigate") do args
         resp = try
             payload = jsonArgs(args)
@@ -3750,6 +3798,36 @@ function registerTerminalBindings!(wv)
     @info "flootyWebUi: terminal bindings registered"
     return wv
 end
+
+const ASSET_MOUNTS = Dict{String,String}()
+
+addAssetMount!(prefix::AbstractString, directory::AbstractString) = (
+    function ()
+        p = strip(String(prefix))
+        isempty(p) || p[1] == '/' || error("asset mount prefix must start with `/`: $prefix")
+        p = endswith(p, "/") ? String(p) : String(p) * "/"
+        d = normpath(abspath(String(directory)))
+        isdir(d) || error("asset mount directory not found: $directory")
+        ASSET_MOUNTS[p] = d
+        p
+    end)()
+removeAssetMount!(prefix::AbstractString) = (
+    function ()
+        p = strip(String(prefix))
+        p = isempty(p) || p[1] != '/' ? String(p) : String(p)
+        p = endswith(p, "/") ? p : String(p) * "/"
+        delete!(ASSET_MOUNTS, String(p))
+        nothing
+    end)()
+assetMountFor(path::AbstractString) = (
+    function ()
+        candidates = sort(collect(keys(ASSET_MOUNTS)), by = length, rev = true)
+        for prefix in candidates
+            path == rstrip(prefix, '/') && return (String(rstrip(prefix, '/')), "index.html", ASSET_MOUNTS[prefix])
+            startswith(path, prefix) && return (prefix, lstrip(path[(length(prefix) + 1):end], '/'), ASSET_MOUNTS[prefix])
+        end
+        nothing
+    end)()
 
 const ASSET_MIME_TYPES = Dict(
     ".html"  => "text/html; charset=utf-8",
@@ -3849,16 +3927,24 @@ function startAssetServer!()
             return HTTP.Response(200, ["Content-Type" => "application/javascript"];
                                  body = body)
         end
-        file = normpath(assetsDir, lstrip(path, '/'))
+        mount = assetMountFor(path)
         notFound = HTTP.Response(404, ["Content-Type" => "text/plain"];
                                  body = "not found")
-        # Path traversal guard: resolved path must stay inside assetsDir.
+        mimeFor = file -> get(ASSET_MIME_TYPES, lowercase(splitext(file)[2]),
+                               "application/octet-stream")
+        if mount !== nothing
+            _, relative, rootDir = mount
+            file = normpath(rootDir, relative)
+            withinAssets = file == rootDir ||
+                           startswith(file, rootDir * Base.Filesystem.path_separator)
+            (withinAssets && isfile(file)) || return notFound
+            return HTTP.Response(200, ["Content-Type" => mimeFor(file)]; body = read(file))
+        end
+        file = normpath(assetsDir, lstrip(path, '/'))
         withinAssets = file == assetsDir ||
                        startswith(file, assetsDir * Base.Filesystem.path_separator)
         (withinAssets && isfile(file)) || return notFound
-        mime = get(ASSET_MIME_TYPES, lowercase(splitext(file)[2]),
-                   "application/octet-stream")
-        return HTTP.Response(200, ["Content-Type" => mime]; body = read(file))
+        return HTTP.Response(200, ["Content-Type" => mimeFor(file)]; body = read(file))
     end
     # With an ephemeral port (0), HTTP's Listener.addr keeps the ORIGINAL port
     # 0 — the really-bound address lives on the inner Base.IOServer socket,
@@ -4080,7 +4166,7 @@ Create (or focus) a BROWSER tab for a BrowserSession; the page owns the panel
 """
 function addBrowserTabUi(wv, id::AbstractString, name::AbstractString,
                          url::AbstractString; root_id::AbstractString = "",
-                         parent_id::AbstractString = "")::Bool
+                         parent_id::AbstractString = "", open_native::Bool = true)::Bool
     wv === nothing && return false
     try
         Webviews.dispatch(wv) do
@@ -4093,7 +4179,9 @@ function addBrowserTabUi(wv, id::AbstractString, name::AbstractString,
         end
         # The panel is only an iframe; many sites refuse it. Give the session
         # a real top-level WKWebView window as well.
-        openBrowserWindow!(String(id), String(url); name = String(name))
+        open_native &&
+            open_native && canOpenNativeBrowser(url) &&
+            openBrowserWindow!(String(id), String(url); name = String(name))
         return true
     catch err
         @debug "flootyWebUi: addBrowserTabUi failed" exception = err
