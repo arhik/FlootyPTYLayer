@@ -6250,6 +6250,26 @@
                 return '<div class="workspace-section' + (needs ? ' needs' : '') + '">' + esc(label) + badge + '</div>' +
                        items.map(renderFolder).join('');
             };
+            const draw = () => {
+                const q = searchQuery.trim().toLowerCase();
+                const match = f => !q ||
+                    String(f.name || '').toLowerCase().includes(q) ||
+                    String(f.path || '').toLowerCase().includes(q) ||
+                    String(f.attention_reason || '').toLowerCase().includes(q);
+                const filtered = workspaceFolders.filter(match);
+                const granted = filtered.filter(f => f.attention !== true);
+                const attention = filtered.filter(f => f.attention === true);
+                const totalFiles = workspaceFolders.reduce((sum, f) => sum + (Number(f.file_count) || 0), 0);
+                const anyTruncated = workspaceFolders.some(f => f.count_truncated === true);
+                if (folderCount) folderCount.textContent = `${workspaceFolders.length} folder${workspaceFolders.length === 1 ? '' : 's'}` +
+                    (attention.length ? ` · ${attention.length} need${attention.length === 1 ? 's' : ''} access` : '');
+                if (fileCount) fileCount.textContent = `${totalFiles}${anyTruncated ? '+' : ''} files`;
+                if (!filtered.length) {
+                    list.innerHTML = '<div class="workspace-empty">' + (q ? 'No folders match the search.' : 'No folders yet — paste a path or drop one here.') + '</div>';
+                    return;
+                }
+                list.innerHTML = section('Granted', granted, false) + section('Needs attention', attention, true);
+            };
             const mutate = async (name, payload) => {
                 const result = await workspaceCall(name, payload);
                 console.log('workspace mutate', name, result);
