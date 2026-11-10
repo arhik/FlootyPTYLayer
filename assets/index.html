@@ -6160,12 +6160,20 @@
                 } catch (e) {}
             };
             window.handleWorkspaceNativeDrop = paths => {
+                const trace = m => { try { window.flootyFileDrop && window.flootyFileDrop(String(m)); } catch (_) {} };
+                trace('heard paths=' + JSON.stringify(paths));
                 try {
                     setOpen(true);
+                    trace('panel opened');
                     const items = Array.isArray(paths) ? paths : [];
-                    for (const p of items) addPath(String(p), false);
+                    for (const p of items) {
+                        trace('adding ' + p);
+                        addPath(String(p), false);
+                    }
                     clearSearch();
+                    trace('done');
                 } catch (e) {
+                    trace('drop error: ' + (e && e.message ? e.message : String(e)));
                     console.error('workspace native drop failed', e);
                 }
             };

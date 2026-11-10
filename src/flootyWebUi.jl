@@ -3561,6 +3561,13 @@ function registerTerminalBindings!(wv)
         jsonOk()
     end
 
+    # Drop tracer: always @info so the user can see what the page does with a drop.
+    Webviews.bind(wv, "flootyFileDrop") do args
+        msg = join([String(a) for a in args], " ")
+        @info string("[ui-drop] ", msg)
+        return jsonOk()
+    end
+
     # Frontend debug channel: mirrors page-side diagnostics to stdout.
     Webviews.bind(wv, "flootyDebug") do args
         msg = args isa Tuple && !isempty(args) ? String(args[1]) : ""
