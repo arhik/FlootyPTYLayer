@@ -972,6 +972,7 @@ const NEW_PDF_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_TYPST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_EVENT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_LIST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const EDITOR_TOGGLE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const BROWSER_NAV_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const PDF_TOOL_RESULT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const PDF_INTERACTION_HANDLER = Ref{Union{Nothing,Function}}(nothing)
@@ -1038,6 +1039,12 @@ end
 "Register `f(session_id, root)` returning a JSON array of file entries."
 function addEditorListHandler!(f::Function)
     EDITOR_LIST_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(session_id, root, path)` returning a JSON array of file entries."
+function addEditorToggleHandler!(f::Function)
+    EDITOR_TOGGLE_HANDLER[] = f
     return nothing
 end
 
@@ -3783,6 +3790,23 @@ function registerTerminalBindings!(wv)
             "{\"success\":true,\"files\":" * files * "}"
         catch err
             @error "flootyWebUi: flootyEditorListFiles failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootyEditorToggleDirectory") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = EDITOR_TOGGLE_HANDLER[]
+            handler === nothing && return errorJson("no editor directory handler installed")
+            sessionId = String(get(payload, :session, get(payload, "session", "")))
+            root = String(get(payload, :root, get(payload, "root", "")))
+            target = String(get(payload, :path, get(payload, "path", "")))
+            files = String(Base.invokelatest(handler, sessionId, root, target))
+            "{\"success\":true,\"files\":" * files * "}"
+        catch err
+            @error "flootyWebUi: flootyEditorToggleDirectory failed" exception = err
             errorJson(sprint(showerror, err))
         end
         resp
