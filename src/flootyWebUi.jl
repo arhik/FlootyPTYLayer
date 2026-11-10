@@ -3085,22 +3085,7 @@ function installWorkspaceNativeDrag!(wv)
     contentView = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}),
                         win, _sel("contentView"))
     contentView == C_NULL && return nothing
-    stack = [contentView]
-    while !isempty(stack)
-        view = pop!(stack)
-        _registerDraggingTypes!(view)
-        subviews = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}),
-                         view, _sel("subviews"))
-        if subviews != C_NULL
-            count = ccall(:objc_msgSend, Culong, (Ptr{Cvoid}, Ptr{Cvoid}),
-                          subviews, _sel("count"))
-            for index in 0:count - 1
-                child = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Culong),
-                              subviews, _sel("objectAtIndex:"), Culong(index))
-                child != C_NULL && push!(stack, child)
-            end
-        end
-    end
+    _registerDraggingTypes!(contentView)
     cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "WKWebView")
     cls == C_NULL && (cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "NSView"))
     cls == C_NULL && return nothing
