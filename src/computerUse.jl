@@ -9,7 +9,6 @@
 # CGEventPost and may require Accessibility permission.
 
 using Sockets
-import Sockets: IPAddress
 
 const COMPUTER_USE_PORT = Ref{Int}(0)
 const COMPUTER_USE_PENDING = Dict{String, Channel{Any}}()
@@ -19,7 +18,7 @@ const COMPUTER_USE_LOCK = ReentrantLock()
 function startComputerUseServer!(; port::Int=0, host::String="127.0.0.1")
     lock(COMPUTER_USE_LOCK) do
         COMPUTER_USE_PORT[] != 0 && return COMPUTER_USE_PORT[]
-        server = Sockets.listen(parse(IPAddress, host), UInt16(port))
+        server = Sockets.listen(UInt16(port))
         port = Int(server.port)
         COMPUTER_USE_PORT[] = port
         @info "computer-use: listening" host=string(host) port
