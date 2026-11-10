@@ -1760,6 +1760,8 @@
             </div>
             <button id="sessionBtn" title="New session (sibling of the current one)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">+ session</button>
+            <button id="workspaceToggle" title="Toggle workspace sidebar"
+                    style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">workspace</button>
             <button id="splitBtn" title="Split the pane: Alt+D vertical (side by side), Alt+Shift+D horizontal (stacked)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">split</button>
             <div id="ownershipPill" class="owner-user" style="display:none"
@@ -6182,8 +6184,8 @@
     </script>
 
     <script>
-        (function installWorkspacePanel() {
-            const panel = document.getElementById('workspacePanel');
+                (function installWorkspacePanel() {
+                        const panel = document.getElementById('workspacePanel');
             const rootName = document.getElementById('workspaceRootName');
             const rootPath = document.getElementById('workspaceRootPath');
             const tree = document.getElementById('workspaceTree');
@@ -6191,6 +6193,7 @@
             const refresh = document.getElementById('workspaceRefresh');
             const change = document.getElementById('workspaceChange');
             const close = document.getElementById('workspaceClose');
+            const toggle = document.getElementById('workspaceToggle');
 
             function escapeHtml(value) {
                 return String(value ?? '').replace(/[&<>"']/g, c => ({
@@ -6259,7 +6262,7 @@
                     });
             }
 
-            if (add) {
+                        if (add) {
                 add.addEventListener('click', async () => {
                     const existing = rootPath && !rootPath.textContent.includes('Choose') ? rootPath.textContent.trim() : '/';
                     const path = await flootyPrompt('Project folder', '/path/to/project', existing);
@@ -6275,6 +6278,9 @@
                 });
             }
             if (close) close.addEventListener('click', () => setOpen(false));
+            if (toggle) {
+                toggle.addEventListener('click', () => panel.classList.toggle('is-open'));
+            }
 
             if (tree) {
                 tree.addEventListener('click', event => {
@@ -6300,13 +6306,9 @@
                 });
             }
 
-            try {
-                if (localStorage.getItem('flooty:workspace-open') === '0') panel.classList.remove('is-open');
-                else loadWorkspace('');
-            } catch (_e) {
-                loadWorkspace('');
-            }
-        })();
+                        setOpen(true);
+                        loadWorkspace('');
+                    })();
     </script>
 
     <script type="module">
