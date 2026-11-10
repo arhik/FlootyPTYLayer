@@ -43,6 +43,11 @@ computerUsePort() = COMPUTER_USE_PORT[]
 function _computerUseAcceptLoop(server)
     while true
         sock = try Sockets.accept(server) catch; break end
+        try
+            peer = Sockets.getsockname(sock)
+            @info "[ui-drop] computer-use accepted connection" peer
+        catch
+        end
         Threads.@spawn begin
             try
                 _computerUseClientLoop(sock)
@@ -58,6 +63,7 @@ end
 function _computerUseClientLoop(sock)
     while isopen(sock)
         line = try readline(sock) catch; break end
+        @info "computer-use: received line" line
         isempty(strip(line)) && continue
         msg = try
             JSON.parse(line)
