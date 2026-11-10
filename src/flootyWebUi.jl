@@ -4651,6 +4651,7 @@ function launchTerminalUI(; cmd::Cmd = defaultTerminalCmd(),
     installWorkspaceNativeDrag!(wv)
     Webviews.navigate!(wv, baseUrl * "index.html")
     terminalUiRunning[] = true
+    get(ENV, "FLOOTY_COMPUTER_USE", "true") in ("1", "true") && startComputerUseServer!()
 
     @info "flootyWebUi: terminal UI running" url = baseUrl * "index.html" width height
     @info "flootyWebUi: data channel" port = channelPort
