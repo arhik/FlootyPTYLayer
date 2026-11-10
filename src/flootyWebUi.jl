@@ -970,6 +970,7 @@ const CHAT_CLOSE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_BROWSER_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_PDF_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_TYPST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const NEW_FILETREE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_EVENT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_LIST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_TOGGLE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
@@ -989,6 +990,7 @@ const WORKSPACE_REMOVE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const WORKSPACE_TOGGLE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const WORKSPACE_FILES_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const WORKSPACE_CHANGELS_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_READ_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 
 "Install the provider of the app's root chat session id."
 function addChatSessionProvider!(f::Function)
@@ -1038,6 +1040,12 @@ function addNewTypstHandler!(f::Function)
     return nothing
 end
 
+"Register `f(parent_id, folder_id, name)` to create a File tree session."
+function addNewFileTreeHandler!(f::Function)
+    NEW_FILETREE_HANDLER[] = f
+    return nothing
+end
+
 "Register `f(kind, session_id, payload)` for editor events."
 function addEditorEventHandler!(f::Function)
     EDITOR_EVENT_HANDLER[] = f
@@ -1065,6 +1073,12 @@ end
 "Register `f(kind, session_id, payload)` for generic workspace actions."
 function addWorkspaceHandler!(f::Function)
     WORKSPACE_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(session_id, folder_id, path)` to read a file through the workspace's permissions."
+function addWorkspaceReadHook!(f::Function)
+    WORKSPACE_READ_HANDLER[] = f
     return nothing
 end
 
@@ -3887,6 +3901,17 @@ function registerTerminalBindings!(wv)
         folder = payload === nothing ? "" : jsonStr(payload, :folder_id)
         JSON.json(workspaceInvoke(WORKSPACE_FILES_HANDLER, String(tid), String(folder)))
     end
+    Webviews.bind(wv, "workspaceReadFile") do args
+        payload = try
+            jsonArgs(args)
+        catch
+            nothing
+        end
+        tid = payload === nothing ? "" : jsonStr(payload, :terminal_id)
+        folder = payload === nothing ? "" : jsonStr(payload, :folder_id)
+        path = payload === nothing ? "" : jsonStr(payload, :path)
+        JSON.json(workspaceInvoke(WORKSPACE_READ_HANDLER, String(tid), String(folder), String(path)))
+    end
     Webviews.bind(wv, "workspaceChanges") do args
         payload = try
             jsonArgs(args)
@@ -4150,6 +4175,21 @@ function registerTerminalBindings!(wv)
             result
         catch err
             @error "flootyWebUi: flootyWorkspace failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootyNewFileTreeSession") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = NEW_FILETREE_HANDLER[]
+            handler === nothing && return errorJson("no file tree spawner installed")
+            Base.invokelatest(handler, jsonStr(payload, :parent_id),
+                              jsonStr(payload, :folder_id), jsonStr(payload, :name))
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootyNewFileTreeSession failed" exception = err
             errorJson(sprint(showerror, err))
         end
         resp
@@ -4611,6 +4651,24 @@ function addChatTabUi(wv, id::AbstractString, name::AbstractString = "Chat";
         return true
     catch err
         @debug "flootyWebUi: addChatTabUi failed" exception = err
+        return false
+    end
+end
+
+function addFileTreeTabUi(wv, id::AbstractString, name::AbstractString;
+                         root_id::AbstractString = "", parent_id::AbstractString = "")::Bool
+    wv === nothing && return false
+    try
+        Webviews.dispatch(wv) do
+            Webviews.eval!(wv,
+                "if (typeof window.flootyAddFileTreeTab === 'function') " *
+                "window.flootyAddFileTreeTab(\"" * escapeJsString(String(id)) * "\", \"" *
+                escapeJsString(String(name)) * "\", \"" * escapeJsString(String(root_id)) *
+                "\", \"" * escapeJsString(String(parent_id)) * "\");")
+        end
+        return true
+    catch err
+        @error "flootyWebUi: addFileTreeTabUi failed" exception = err
         return false
     end
 end

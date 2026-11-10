@@ -815,6 +815,45 @@
         .statusbar-left,
         .statusbar-right { display: flex; gap: 16px; }
         .status-item { display: flex; align-items: center; gap: 6px; }
+                .file-tree-panel {
+            flex: 0 0 clamp(220px, 24vw, 380px);
+            min-width: 0;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            background: rgba(18, 18, 26, 0.92);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 19;
+        }
+        .file-tree-panel.is-open { display: flex; }
+        .workspace.filetree-focus .file-tree-panel { flex: 1 1 auto; border-right: 1px solid rgba(255, 255, 255, 0.08); }
+        .workspace.filetree-focus #terminal-container,
+        .workspace.filetree-focus #chatResizer,
+        .workspace.filetree-focus #browserPanel,
+        .workspace.filetree-focus #pdfPanel,
+        .workspace.filetree-focus #typstPanel { display: none !important; }
+        .file-tree-header { height: 38px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .file-tree-title { display: flex; align-items: center; gap: 7px; color: rgba(255,255,255,0.72); font: 11px var(--mono, ui-monospace, monospace); letter-spacing: 0.12em; text-transform: uppercase; }
+        .file-tree-actions { display: flex; gap: 4px; }
+        .file-tree-icon-button { width: 25px; height: 25px; border: 0; border-radius: 5px; background: transparent; color: rgba(219,230,247,0.58); cursor: pointer; font-size: 14px; }
+        .file-tree-icon-button:hover { color: #fff; background: rgba(255,255,255,0.08); }
+        .file-tree-search { width: calc(100% - 20px); margin: 8px 10px 6px; height: 27px; padding: 0 8px; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.09); border-radius: 5px; outline: none; font: 11px var(--sans, sans-serif); }
+        .file-tree-search:focus { border-color: rgba(212,175,90,0.42); }
+        .file-tree-columns { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 0 12px 6px; border-bottom: 1px solid rgba(255,255,255,0.055); color: rgba(255,255,255,0.34); font: 9px var(--mono, ui-monospace, monospace); letter-spacing: 0.08em; text-transform: uppercase; }
+        .file-tree-list { flex: 1; min-height: 0; overflow: auto; padding: 5px 6px; }
+        .file-tree-root, .file-tree-row { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 25px; padding: 0 7px; border: 0; border-radius: 5px; color: rgba(255,255,255,0.72); background: transparent; text-align: left; width: 100%; }
+        .file-tree-root { color: rgba(255,255,255,0.9); padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid rgba(255,255,255,0.07); font-weight: 600; }
+        .file-tree-row:hover { background: rgba(255,255,255,0.065); color: #fff; }
+        .file-tree-row.selected { background: rgba(212,175,90,0.14); color: rgb(244,213,131); }
+        .file-tree-row.muted { color: rgba(255,255,255,0.42); }
+        .file-tree-icon { flex: none; width: 14px; color: #7dcfff; font-size: 10px; text-align: center; }
+        .file-tree-row.dir .file-tree-icon { color: #ffd84d; }
+        .file-tree-row.file .file-tree-icon { color: #7dcfff; }
+        .file-tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-tree-meta { flex: none; color: rgba(255,255,255,0.32); font: 9px var(--mono, ui-monospace, monospace); }
+        .file-tree-footer { display: flex; justify-content: space-between; gap: 8px; padding: 7px 9px; border-top: 1px solid rgba(255,255,255,0.07); color: rgba(255,255,255,0.42); font: 9px var(--mono, ui-monospace, monospace); }
+        .file-tree-empty { padding: 28px 10px; color: rgba(255,255,255,0.36); text-align: center; font-size: 12px; line-height: 1.5; }
+
         .workspace-sidebar {
             flex: none;
             width: 330px;
@@ -1950,6 +1989,15 @@
                 </svg>
                 <span class="session-label">Typst</span>
             </button>
+            <button type="button" class="session-wheel-item" data-session-kind="filetree"
+                    title="File tree" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 6h8M4 12h10M4 18h8"/>
+                    <circle cx="18" cy="12" r="2"/>
+                    <path d="M17 12h4"/>
+                </svg>
+                <span class="session-label">File tree</span>
+            </button>
             <button type="button" class="session-wheel-item" data-session-kind="settings"
                     title="Settings" role="menuitem">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -2037,6 +2085,25 @@
                  level); no nested tree in the left rail. -->
             <div id="childTabs" class="child-tabs"></div>
             <div class="workspace-body">
+                <aside id="fileTreePanel" class="file-tree-panel" hidden aria-label="File tree">
+                    <div class="file-tree-header">
+                        <div class="file-tree-title">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M4 12h14M4 18h9"/></svg>
+                            <span>File tree</span>
+                        </div>
+                        <div class="file-tree-actions">
+                            <button id="fileTreeRefresh" class="file-tree-icon-button" type="button" title="Refresh file tree" aria-label="Refresh file tree">↻</button>
+                            <button id="fileTreeClose" class="file-tree-icon-button" type="button" title="Close file tree" aria-label="Close file tree">×</button>
+                        </div>
+                    </div>
+                    <input id="fileTreeSearch" class="file-tree-search" type="search" placeholder="Filter files" spellcheck="false" aria-label="Filter files">
+                    <div class="file-tree-columns" aria-hidden="true"><span>Files</span><span>Git</span></div>
+                    <div id="fileTreeList" class="file-tree-list"></div>
+                    <div class="file-tree-footer">
+                        <span id="fileTreeCount">0 files</span>
+                        <span id="fileTreeGit">No repository</span>
+                    </div>
+                </aside>
                 <div class="terminal-container" id="terminal-container"></div>
                 <div id="browserPanel" class="browser-panel" hidden>
                     <div class="browser-bar">
@@ -2103,28 +2170,7 @@
                         <p>Drop folder here</p>
                         <span class="drop-hint">or paste/add an absolute path above</span>
                     </div>
-                    <div class="workspace-sections">
-                        <section class="workspace-section2 workspace-files-section">
-                            <div class="workspace-section2-header">
-                                <svg class="workspace-section-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                                <span>Files</span>
-                                <button type="button" id="workspaceFilesRefresh" class="workspace-pane-refresh" title="Refresh files">↻</button>
-                            </div>
-                            <div id="workspaceFileTree" class="workspace-file-tree"></div>
-                        </section>
-                        <section class="workspace-section2 workspace-git-section">
-                            <div class="workspace-section2-header">
-                                <svg class="workspace-section-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 6h8a4 4 0 0 1 4 4v4"></path><path d="M16 8h-4a4 4 0 0 0-4 4v4"></path></svg>
-                                <span>Changes</span>
-                                <button type="button" id="workspaceChangesRefresh" class="workspace-pane-refresh" title="Refresh changes">↻</button>
-                            </div>
-                            <div id="workspaceGitStatus" class="workspace-git-status"></div>
-                        </section>
-                        <details id="workspacePermissionsDetails" class="workspace-permissions-details">
-                            <summary>Workspace folders <span id="workspaceAttentionBadge"></span></summary>
-                            <div id="workspaceList" class="folder-list"></div>
-                        </details>
-                    </div>
+                    <div id="workspaceList" class="folder-list workspace-folder-list"></div>
                     <div class="workspace-stats">
                         <span id="workspaceFolderCount">0 folders</span>
                         <span id="workspaceFileCount">0 files</span>
@@ -2681,6 +2727,12 @@
             const hasChat = Object.keys(chatTabs).some(id => id !== CHAT_SESSION_ID);
             const hasBrowser = Object.keys(browserTabs).length > 0;
             ws.classList.toggle('chat-only', !hasTerminal && !hasChat && !hasBrowser);
+            const filetreeActive = !!activeBrowserId && browserTabs[activeBrowserId]
+                && String(browserTabs[activeBrowserId].url || '').startsWith('filetree:');
+            ws.classList.toggle('filetree-focus', filetreeActive);
+            const fileTreePanel = document.getElementById('fileTreePanel');
+            if (fileTreePanel) fileTreePanel.classList.toggle('is-open', filetreeActive);
+            if (filetreeActive) refreshFileTreePane();
             if (typeof forceFitActive === 'function') {
                 setTimeout(forceFitActive, 0);
                 setTimeout(forceFitActive, 120);
@@ -3820,6 +3872,7 @@
         const browserTabs = Object.create(null); // browser session id -> info
         let activeChatId = null;
         let activeBrowserId = null;
+        let activeFileTreeId = null;
         function activeChatInfo() {
             if (activeBrowserId && browserTabs[activeBrowserId])
                 return browserTabs[activeBrowserId];
@@ -4012,6 +4065,8 @@
             if (browserPanel) browserPanel.hidden = true;
             const typstPanel = document.getElementById('typstPanel');
             if (typstPanel) typstPanel.hidden = false;
+            window.currentEditorSessionId = info.typstEditorId;
+            window.currentTypstTabId = id;
             if (window.editorLayer && typeof window.editorLayer.mount === 'function') window.editorLayer.mount(info.typstEditorId);
             if (window.typstPdfLayer && typeof window.typstPdfLayer.mount === 'function') window.typstPdfLayer.mount(info.typstPdfId);
             renderChatStreamTabs(info);
@@ -4025,9 +4080,40 @@
         }
 
         function deactivateTypstPane() {
+            window.currentTypstTabId = null;
             unmountTypstPane();
             const ws = document.querySelector('.workspace');
             if (ws) ws.classList.remove('typst-focus');
+        }
+
+        function deactivateFileTreePane() {
+            const ws = document.querySelector('.workspace');
+            if (ws) ws.classList.remove('filetree-focus');
+            const panel = document.getElementById('fileTreePanel');
+            if (panel) panel.classList.remove('is-open');
+        }
+
+        function activateFileTreeTab(id) {
+            const info = browserTabs[id];
+            if (!info) return;
+            captureAssistDraft();
+            deactivatePdfPane();
+            deactivateTypstPane();
+            const ws = document.querySelector('.workspace');
+            ws && ws.classList.remove('chat-focus', 'browser-focus', 'pdf-focus', 'typst-focus', 'filetree-focus');
+            activeBrowserId = id;
+            activeChatId = null;
+            activeTerminalId = null;
+            activeSplitId = null;
+            activeFileTreeId = id;
+            renderChatStreamTabs(info);
+            chatRenderedFor = null;
+            renderActiveAgentChat();
+            restoreAssistDraft(info);
+            updateLayoutMode();
+            renderContextUsage();
+            renderActiveProgress();
+            renderTabRail();
         }
 
         function deactivatePdfPane() {
@@ -4052,11 +4138,17 @@
             activeTerminalId = null;
             activeSplitId = null;
             const ws = document.querySelector('.workspace');
+            const isFileTree = String(info.url || '').includes('filetree:');
+            if (isFileTree) {
+                activateFileTreeTab(id);
+                return;
+            }
             const isTypst = String(info.url || '').includes('typst:');
             if (isTypst) {
                 activateTypstPane(id);
                 return;
             }
+            deactivateFileTreePane();
             deactivateTypstPane();
             ws && ws.classList.remove('chat-focus');
             ws && ws.classList.remove('browser-focus');
@@ -4327,6 +4419,32 @@
                 browserTabs[id].typstEditorId = editorId || browserTabs[id].typstEditorId;
                 browserTabs[id].typstPdfId = pdfId || browserTabs[id].typstPdfId;
                 browserTabs[id].kind = 'typst';
+            }
+            activateBrowserTab(id);
+            return id;
+        };
+
+        window.flootyAddFileTreeTab = function (id, name, rootId, parentId) {
+            if (!id) return id;
+            if (rootId && !CHAT_SESSION_ID) CHAT_SESSION_ID = rootId;
+            const rid = rootId || CHAT_SESSION_ID;
+            if (rid && id !== rid && !chatTabs[rid]) {
+                CHAT_ONLY.name = 'Chat';
+                CHAT_ONLY.kind = 'chat';
+                chatTabs[rid] = CHAT_ONLY;
+                createChatTab(rid, 'Chat');
+            }
+            if (!browserTabs[id]) {
+                browserTabs[id] = {
+                    name: name || 'File tree', juliaId: id,
+                    url: 'filetree:' + id,
+                    kind: 'filetree', chat: [], monitorChat: [], trajectoryMonitorChat: [], preferencesMonitorChat: [],
+                    chatStream: 'agent', parent: parentId || null,
+                    popups: [], exited: false
+                };
+            } else {
+                browserTabs[id].kind = 'filetree';
+                browserTabs[id].url = 'filetree:' + id;
             }
             activateBrowserTab(id);
             return id;
@@ -6002,18 +6120,22 @@
             const errorEl = document.getElementById('workspaceError');
             const errorMessage = document.getElementById('workspaceErrorMessage');
             const errorClose = document.getElementById('workspaceErrorClose');
-            const fileTree = document.getElementById('workspaceFileTree');
-            const changesStatus = document.getElementById('workspaceGitStatus');
-            const filesRefresh = document.getElementById('workspaceFilesRefresh');
-            const changesRefresh = document.getElementById('workspaceChangesRefresh');
             const attentionBadge = document.getElementById('workspaceAttentionBadge');
             if (!panel || !list) return;
             let selectedWorkspacePath = '';
             let workspaceFolders = [];
             let searchQuery = '';
             const currentTerminalId = () => {
-                const active = terminals[activeTerminalId];
-                return active && active.juliaId ? String(active.juliaId) : '';
+                if (activeBrowserId && browserTabs[activeBrowserId]) {
+                    const info = browserTabs[activeBrowserId];
+                    return String(info.juliaId || info.sessionId || activeBrowserId);
+                }
+                if (activeChatId && chatTabs[activeChatId]) {
+                    const info = chatTabs[activeChatId];
+                    return String(info.juliaId || info.sessionId || CHAT_SESSION_ID || activeChatId);
+                }
+                const active = activeTerminalId ? terminals[activeTerminalId] : null;
+                return active && active.juliaId ? String(active.juliaId) : (CHAT_SESSION_ID || '');
             };
             let layoutInitialized = false;
             const workspaceCall = (name, payload) =>
@@ -6096,137 +6218,6 @@
                 return '<div class="workspace-section' + (needs ? ' needs' : '') + '">' + esc(label) + badge + '</div>' +
                        items.map(renderFolder).join('');
             };
-            const entryMatches = (entry, q) => {
-                const name = String(entry.name || '').toLowerCase();
-                const path = String(entry.path || entry.relative || '').toLowerCase();
-                if (!q || name.includes(q) || path.includes(q)) return true;
-                return Array.isArray(entry.children) && entry.children.some(child => entryMatches(child, q));
-            };
-            const filterTree = tree => {
-                const q = searchQuery.trim().toLowerCase();
-                if (!q) return tree;
-                const filterEntry = entry => {
-                    const filtered = {
-                        ...entry,
-                        children: Array.isArray(entry.children) ? entry.children.map(filterEntry).filter(Boolean) : []
-                    };
-                    const self = String(entry.name || '').toLowerCase().includes(q) || String(entry.path || '').toLowerCase().includes(q);
-                    return (self || filtered.children.length) ? filtered : null;
-                };
-                return tree.map(root => {
-                    const filtered = {
-                        ...root,
-                        children: Array.isArray(root.children) ? root.children.map(filterEntry).filter(Boolean) : []
-                    };
-                    return filtered;
-                });
-            };
-            const renderTreeEntry = (entry, depth = 0) => {
-                const indent = 8 + depth * 16;
-                const isDirectory = entry.type === 'directory';
-                const icon = isDirectory
-                    ? '<svg class="workspace-tree-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>'
-                    : '<svg class="workspace-tree-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
-                const selected = String(entry.path) === selectedWorkspacePath ? ' selected' : '';
-                const row = isDirectory
-                    ? '<div class="workspace-tree-folder" style="padding-left:' + indent + 'px">' + icon + '<span class="workspace-tree-name" title="' + esc(entry.name) + '">' + esc(entry.name) + '</span></div>'
-                    : '<button type="button" class="workspace-tree-file' + selected + '" data-path="' + esc(entry.path) + '" style="padding-left:' + indent + 'px">' + icon + '<span class="workspace-tree-name" title="' + esc(entry.path) + '">' + esc(entry.name) + '</span></button>';
-                const children = Array.isArray(entry.children) ? entry.children.map(child => renderTreeEntry(child, depth + 1)).join('') : '';
-                return row + children;
-            };
-            const renderFiles = state => {
-                if (!fileTree) return;
-                if (!state || !state.success) { fileTree.innerHTML = '<div class="workspace-empty-item">' + esc((state && state.error) || 'files unavailable') + '</div>'; return; }
-                const trees = Array.isArray(state.tree) ? state.tree : [];
-                const filtered = filterTree(trees);
-                if (!filtered.length) {
-                    fileTree.innerHTML = '<div class="workspace-empty-item">No granted folders yet.</div>';
-                    return;
-                }
-                fileTree.innerHTML = filtered.map(root => {
-                    if (!root || root.error) return '<div class="workspace-tree-root">' + esc(root?.name || '(folder)') + '</div><div class="workspace-empty-item">' + esc(root?.error || 'unreadable folder') + '</div>';
-                    const header = '<div class="workspace-tree-root" title="' + esc(root.path || '') + '">' + esc(root.name || '(folder)') + '</div>';
-                    const children = Array.isArray(root.children) ? root.children.map(child => renderTreeEntry(child, 1)).join('') : '<div class="workspace-empty-item">empty folder</div>';
-                    return header + children;
-                }).join('');
-                fileTree.querySelectorAll('.workspace-tree-file').forEach(el => {
-                    el.addEventListener('click', () => {
-                        selectedWorkspacePath = el.getAttribute('data-path') || '';
-                        fileTree.querySelectorAll('.workspace-tree-file.selected').forEach(row => row.classList.remove('selected'));
-                        el.classList.add('selected');
-                    });
-                });
-            };
-            const renderChanges = state => {
-                if (!changesStatus) return;
-                if (!state || !state.success) { changesStatus.innerHTML = '<div class="workspace-empty-item">' + esc((state && state.error) || 'changes unavailable') + '</div>'; return; }
-                const branch = state.repository ? String(state.branch || '').trim() : 'not a git repository';
-                const changed = Number(state.changed || 0);
-                const staged = Number(state.staged || 0);
-                const unstaged = Number(state.unstaged || 0);
-                const untracked = Number(state.untracked || 0);
-                if (!state.repository) {
-                    changesStatus.innerHTML = '<div class="git-clean">not a git repository</div>';
-                    return;
-                }
-                const files = Array.isArray(state.files) ? state.files : [];
-                const fileRows = files.length
-                    ? files.map(file => {
-                        const status = String(file.status || '?').trim();
-                        const klass = file.untracked ? 'git-untracked' : (file.staged ? 'git-staged' : 'git-unstaged');
-                        return '<div class="git-file-row"><span class="git-file-status ' + klass + '">' + esc(status) + '</span><span class="workspace-tree-name" title="' + esc(file.path) + '">' + esc(file.path) + '</span></div>';
-                    }).join('')
-                    : '<div class="git-clean">working tree clean</div>';
-                changesStatus.innerHTML = '<div class="git-branch">' + esc(branch) + '</div>' +
-                    '<div class="git-summary"><span><strong>' + changed + '</strong> changed</span><span><strong>' + staged + '</strong> staged</span><span><strong>' + unstaged + '</strong> unstaged</span><span><strong>' + untracked + '</strong> untracked</span></div>' + fileRows;
-            };
-            const renderPanes = (filesState, changesState) => {
-                renderFiles(filesState);
-                renderChanges(changesState);
-                if (attentionBadge) {
-                    const attention = workspaceFolders.filter(f => f.attention === true).length;
-                    attentionBadge.textContent = attention ? '· ' + attention + ' need access' : '';
-                }
-            };
-            const refresh = async () => {
-                const [state, files, changes] = await Promise.all([
-                    workspaceCall('workspaceState', { terminal_id: currentTerminalId() }),
-                    workspaceCall('workspaceFiles', { terminal_id: currentTerminalId(), folder_id: '' }),
-                    workspaceCall('workspaceChanges', { terminal_id: currentTerminalId() })
-                ]);
-                if (state && state.success) hideError();
-                render(state);
-                renderPanes(files, changes);
-            };
-            const refreshPanesOnly = async () => {
-                const [files, changes] = await Promise.all([
-                    workspaceCall('workspaceFiles', { terminal_id: currentTerminalId(), folder_id: '' }),
-                    workspaceCall('workspaceChanges', { terminal_id: currentTerminalId() })
-                ]);
-                renderPanes(files, changes);
-            };
-            if (filesRefresh) filesRefresh.addEventListener('click', refreshPanesOnly);
-            if (changesRefresh) changesRefresh.addEventListener('click', refreshPanesOnly);
-            const draw = () => {
-                const q = searchQuery.trim().toLowerCase();
-                const match = f => !q ||
-                    String(f.name || '').toLowerCase().includes(q) ||
-                    String(f.path || '').toLowerCase().includes(q) ||
-                    String(f.attention_reason || '').toLowerCase().includes(q);
-                const filtered = workspaceFolders.filter(match);
-                const granted = filtered.filter(f => f.attention !== true);
-                const attention = filtered.filter(f => f.attention === true);
-                const totalFiles = workspaceFolders.reduce((sum, f) => sum + (Number(f.file_count) || 0), 0);
-                const anyTruncated = workspaceFolders.some(f => f.count_truncated === true);
-                if (folderCount) folderCount.textContent = `${workspaceFolders.length} folder${workspaceFolders.length === 1 ? '' : 's'}` +
-                    (attention.length ? ` · ${attention.length} need${attention.length === 1 ? 's' : ''} access` : '');
-                if (fileCount) fileCount.textContent = `${totalFiles}${anyTruncated ? '+' : ''} files`;
-                if (!filtered.length) {
-                    list.innerHTML = '<div class="workspace-empty">' + (q ? 'No folders match the search.' : 'No folders yet — paste a path or drop one here.') + '</div>';
-                    return;
-                }
-                list.innerHTML = section('Granted', granted, false) + section('Needs attention', attention, true);
-            };
             const mutate = async (name, payload) => {
                 const result = await workspaceCall(name, payload);
                 if (result && !result.success) showError(result.error || `${name} failed`);
@@ -6285,12 +6276,9 @@
             if (pathInput) pathInput.addEventListener('keydown', ev => {
                 if (ev.key === 'Enter') { ev.preventDefault(); addPath(pathInput.value); }
             });
-            let paneRefreshTimer = null;
             if (search) search.addEventListener('input', () => {
                 searchQuery = search.value;
                 draw();
-                clearTimeout(paneRefreshTimer);
-                paneRefreshTimer = setTimeout(() => { refreshPanesOnly(); }, 180);
             });
             if (errorClose) errorClose.addEventListener('click', hideError);
             if (dropZone) {
@@ -6329,6 +6317,180 @@
             setInterval(() => { if (!panel.classList.contains('closed')) refresh(); }, 2000);
             refresh();
         })();
+
+
+        "Render the dedicated file-tree session pane from the workspace API."
+        let fileTreeFilter = '';
+        let fileTreeWorkspace = null;
+        function fileTreeEsc(str) {
+            return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+        }
+        function fileMatches(entry) {
+            if (!fileTreeFilter) return true;
+            const needle = fileTreeFilter.toLowerCase();
+            const haystack = String(entry.path || entry.name || '').toLowerCase();
+            if (haystack.includes(needle)) return true;
+            return (entry.children || []).some(fileMatches);
+        }
+        function renderTreeRows(entries, list, depth, folderId, repoRoot) {
+            for (const entry of entries) {
+                if (!fileMatches(entry)) continue;
+                const isDirectory = String(entry.type || '') === 'directory' || Array.isArray(entry.children);
+                const relPath = isDirectory ? null : relToRepo(entry.path, repoRoot);
+                const status = (!isDirectory && relPath && fileTreeWorkspace)
+                    ? fileTreeWorkspace.changesByPath.get(relPath) || '' : '';
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'file-tree-row ' + (isDirectory ? 'dir' : 'file');
+                row.style.paddingLeft = (12 + depth * 13) + 'px';
+                row.dataset.path = String(entry.path || '');
+                row.dataset.folderId = folderId;
+                row.dataset.isDir = String(isDirectory);
+                row.innerHTML =
+                    '<span class="file-tree-icon">' + (isDirectory ? '▸' : status ? status[0] : '◆') + '</span>' +
+                    '<span class="file-tree-name">' + fileTreeEsc(entry.name || '') + '</span>' +
+                    '<span class="file-tree-meta">' + (isDirectory ? '' : (status || '')) + '</span>';
+                row.addEventListener('click', event => {
+                    event.preventDefault();
+                    list.querySelectorAll('.file-tree-row').forEach(item => item.classList.toggle('selected', item === row));
+                    if (isDirectory) return;
+                    openWorkspaceFile(row.dataset.path, folderId);
+                });
+                list.appendChild(row);
+                if (isDirectory && Array.isArray(entry.children)) {
+                    renderTreeRows(entry.children, list, depth + 1, folderId, repoRoot);
+                }
+            }
+        }
+        function relToRepo(path, repoRoot) {
+            if (!repoRoot) return null;
+            const normalize = x => String(x).replace(/\\/g, '/').replace(/\/+$/, '');
+            const p = normalize(path);
+            const root = normalize(repoRoot) + '/';
+            return p.startsWith(root) ? p.slice(root.length) : null;
+        }
+        function countTreeEntries(entries) {
+            let count = 0;
+            const walk = entry => {
+                count += 1;
+                (entry.children || []).forEach(walk);
+            };
+            entries.forEach(walk);
+            return count;
+        }
+        async function refreshFileTreePane() {
+            const list = document.getElementById('fileTreeList');
+            const count = document.getElementById('fileTreeCount');
+            const git = document.getElementById('fileTreeGit');
+            if (!list || !count || !git) return;
+            const sessionId = activeFileTreeId || '';
+            list.innerHTML = '<div class="file-tree-empty">Loading…</div>';
+            const [files, changes] = await Promise.all([
+                callJulia('workspaceFiles', JSON.stringify({ terminal_id: sessionId, folder_id: '' }))
+                    .catch(() => ({ success: false, error: 'Could not read workspace' })),
+                callJulia('workspaceChanges', JSON.stringify({ terminal_id: sessionId }))
+                    .catch(() => ({ success: false, error: 'No repository' }))
+            ]);
+            const folders = (files && files.folders) || [];
+            const tree = (files && files.tree) || [];
+            const repoRoot = changes && changes.repository ? String(changes.repository) : '';
+            const changesByPath = new Map();
+            if (changes && Array.isArray(changes.files)) {
+                for (const entry of changes.files) {
+                    changesByPath.set(String(entry.path || ''), String(entry.status || '?'));
+                }
+            }
+            fileTreeWorkspace = { changesByPath, repoRoot };
+            list.replaceChildren();
+            tree.forEach((root, index) => {
+                const folder = folders[index] || null;
+                const folderId = folder ? String(folder.id || '') : '';
+                if (!root) return;
+                if (root.error) {
+                    const rootRow = document.createElement('div');
+                    rootRow.className = 'file-tree-root';
+                    rootRow.innerHTML = '<span class="file-tree-icon">⚠</span><span class="file-tree-name">' + fileTreeEsc(root.name || '(folder)') + '</span>';
+                    list.appendChild(rootRow);
+                    const errRow = document.createElement('div');
+                    errRow.className = 'file-tree-empty';
+                    errRow.textContent = String(root.error);
+                    list.appendChild(errRow);
+                    return;
+                }
+                const rootRow = document.createElement('button');
+                rootRow.type = 'button';
+                rootRow.className = 'file-tree-root';
+                rootRow.innerHTML =
+                    '<span class="file-tree-icon">◆</span>' +
+                    '<span class="file-tree-name">' + fileTreeEsc(root.name || root.path || '(folder)') + '</span>' +
+                    '<span class="file-tree-meta">' + (folder && Array.isArray(folder.permissions)
+                        ? folder.permissions.map(p => String(p)[0].toUpperCase()).join(' ') : '') + '</span>';
+                rootRow.title = String(root.path || '');
+                list.appendChild(rootRow);
+                renderTreeRows(root.children || [], list, 0, folderId, repoRoot);
+            });
+            if (!tree.length) {
+                list.innerHTML = '<div class="file-tree-empty">No granted folders yet.<br>Add folders in the workspace panel on the right.</div>';
+            }
+            count.textContent = String(countTreeEntries(tree)) + ' entries';
+            if (changes && changes.success) {
+                git.textContent = String(changes.changed || 0) + ' changed · ' +
+                    String(changes.staged || 0) + ' staged · ' +
+                    String(changes.untracked || 0) + ' untracked';
+                git.title = changes.branch ? ('branch: ' + changes.branch) : '';
+            } else {
+                git.textContent = (changes && changes.error) ? String(changes.error) : 'No repository';
+                git.title = '';
+            }
+        }
+        function languageForPath(path) {
+            const ext = String(path || '').split('.').pop().toLowerCase();
+            if (ext === 'typ' || ext === 'typc') return 'typst';
+            if (ext === 'md' || ext === 'markdown') return 'markdown';
+            return 'text';
+        }
+        async function openWorkspaceFile(path, folderId) {
+            if (!path) return;
+            const treeId = activeFileTreeId || '';
+            const sessionId = window.currentEditorSessionId || '';
+            if (!sessionId) {
+                console.warn('No editor session to open the file in');
+                return;
+            }
+            const result = await callJulia('workspaceReadFile', JSON.stringify({
+                terminal_id: treeId, folder_id: String(folderId || ''), path: String(path)
+            })).catch(() => null);
+            if (!result || result.success === false) {
+                console.warn('Could not read', path, result && result.error);
+                return;
+            }
+            if (window.currentTypstTabId) activateBrowserTab(window.currentTypstTabId);
+            await new Promise(r => setTimeout(r, 30));
+            const editorLayer = window.editorLayer;
+            const api = editorLayer && typeof editorLayer.api === 'function' ? editorLayer.api() : null;
+            if (!api || typeof api.setDocument !== 'function') return;
+            api.setDocument({ path: result.path || path, content: result.content || '', language: languageForPath(path), saved: true });
+            callJulia('flootyEditorEvent', JSON.stringify({ kind: 'open', session: sessionId, path: String(path) })).catch(() => {});
+        }
+
+        const fileTreeCloseButton = document.getElementById('fileTreeClose');
+        if (fileTreeCloseButton) {
+            fileTreeCloseButton.addEventListener('click', () => {
+                if (activeBrowserId && browserTabs[activeBrowserId] && String(browserTabs[activeBrowserId].url).startsWith('filetree:')) {
+                    removeSessionTab(activeBrowserId);
+                    callJulia('fileTreeClose', JSON.stringify({ session_id: activeBrowserId })).catch(() => {});
+                    updateLayoutMode();
+                    activateFallbackSession();
+                }
+            });
+        }
+        const fileTreeRefreshButton = document.getElementById('fileTreeRefresh');
+        if (fileTreeRefreshButton) fileTreeRefreshButton.addEventListener('click', refreshFileTreePane);
+        const fileTreeSearchInput = document.getElementById('fileTreeSearch');
+        if (fileTreeSearchInput) fileTreeSearchInput.addEventListener('input', event => {
+            fileTreeFilter = String(event.target.value || '').trim();
+            refreshFileTreePane();
+        });
 
         // WKWebView does not implement window.prompt (Webviews has no
         // runJavaScriptTextInputPanelWithPrompt delegate), so the native dialog
@@ -6584,6 +6746,12 @@
         window.toggleTreeMap = toggleTreeMap;
         const TYPST_DEV_ROOT = '/Users/arhik/tmp/typst_example';
 
+        function spawnFileTreeSession(parentId) {
+            return callJulia('flootyNewFileTreeSession', JSON.stringify({
+                parent_id: parentId || '', folder_id: '', name: 'File tree'
+            })).catch(function () {});
+        }
+
         function spawnTypstSession(parentId) {
             // Temporary development shortcut: this project was used to test the
             // compound Typst session before folder selection is finalized.
@@ -6621,6 +6789,10 @@
             }
             if (kind === 'typst') {
                 spawnTypstSession(parentSid);
+                return;
+            }
+            if (kind === 'filetree') {
+                spawnFileTreeSession(parentSid);
                 return;
             }
             let parentId = null;
@@ -6687,6 +6859,8 @@
                     })).catch(function () {});
                 } else if (kind === 'typst') {
                     spawnTypstSession('');
+                } else if (kind === 'filetree') {
+                    spawnFileTreeSession('');
                 }
             };
             if (!parent) {
@@ -6718,6 +6892,10 @@
             }
             if (kind === 'typst') {
                 spawnTypstSession(parent);
+                return;
+            }
+            if (kind === 'filetree') {
+                spawnFileTreeSession(parent);
                 return;
             }
             // Terminal/SSH sibling: if the parent is a pane, add it as another
@@ -6785,6 +6963,8 @@
                     })).catch(function () {});
                 } else if (kind === 'typst') {
                     spawnTypstSession('');
+                } else if (kind === 'filetree') {
+                    spawnFileTreeSession('');
                 } else if (kind === 'ssh') {
                     flootyPrompt('SSH target (user@host)', 'user@host', sshTargetHistory()[0] || '', sshTargetHistory())
                         .then(function (target) {
@@ -6816,6 +6996,8 @@
                 })).catch(function () {});
             } else if (kind === 'typst') {
                 spawnTypstSession(parentSid);
+            } else if (kind === 'filetree') {
+                spawnFileTreeSession(parentSid);
             } else if (kind === 'ssh') {
                 flootyPrompt('SSH target (user@host)', 'user@host', sshTargetHistory()[0] || '', sshTargetHistory())
                     .then(function (target) {
