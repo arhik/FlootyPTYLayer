@@ -6154,10 +6154,13 @@
             };
             window.handleWorkspaceNativeDrop = paths => {
                 try {
+                    setOpen(true);
                     const items = Array.isArray(paths) ? paths : [];
                     for (const p of items) addPath(String(p), false);
                     clearSearch();
-                } catch (e) {}
+                } catch (e) {
+                    console.error('workspace native drop failed', e);
+                }
             };
             const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
             const showError = message => {

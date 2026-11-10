@@ -2997,7 +2997,9 @@ function _draggingHasFileURLs(sender::Ptr{Cvoid})::Bool
 end
 
 function _flootyDraggingEntered(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender::Ptr{Cvoid})
-    if _draggingHasFileURLs(sender)
+    paths = _draggingURLs(sender)
+    @info "flooty drag entered" paths
+    if !isempty(paths)
         return _flootyDragMskCopy
     end
     if _flootyDragEnteredOriginal[] != C_NULL
@@ -3008,7 +3010,8 @@ function _flootyDraggingEntered(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender::Ptr
 end
 
 function _flootyDraggingUpdated(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender::Ptr{Cvoid})
-    if _draggingHasFileURLs(sender)
+    paths = _draggingURLs(sender)
+    if !isempty(paths)
         return _flootyDragMskCopy
     end
     if _flootyDragUpdatedOriginal[] != C_NULL
@@ -3033,6 +3036,7 @@ end
 
 function _pushWorkspaceDrop!(wv, paths::Vector{String})
     isempty(paths) && return nothing
+    @info "flooty workspace native drop push" paths
     payload = _jitterPathPayload(paths)
     script = "window.handleWorkspaceNativeDrop && window.handleWorkspaceNativeDrop(" * payload * ".paths);"
     try
@@ -3057,8 +3061,10 @@ function _flootyPerformDragOperation(_self::Ptr{Cvoid}, _cmd::Ptr{Cvoid}, sender
         nothing
     end
     paths = _draggingURLs(sender)
+    @info "flooty drop performed" paths
     if !isempty(paths)
         active === nothing || _pushWorkspaceDrop!(active, paths)
+        active === nothing && @info "flooty drop dropped on no active window"
         return true
     end
     if _flootyPerformDropOriginal[] != C_NULL
@@ -3079,7 +3085,22 @@ function installWorkspaceNativeDrag!(wv)
     contentView = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}),
                         win, _sel("contentView"))
     contentView == C_NULL && return nothing
-    _registerDraggingTypes!(contentView)
+    stack = [contentView]
+    while !isempty(stack)
+        view = pop!(stack)
+        _registerDraggingTypes!(view)
+        subviews = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}),
+                         view, _sel("subviews"))
+        if subviews != C_NULL
+            count = ccall(:objc_msgSend, Culong, (Ptr{Cvoid}, Ptr{Cvoid}),
+                          subviews, _sel("count"))
+            for index in 0:count - 1
+                child = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Culong),
+                              subviews, _sel("objectAtIndex:"), Culong(index))
+                child != C_NULL && push!(stack, child)
+            end
+        end
+    end
     cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "WKWebView")
     cls == C_NULL && (cls = ccall(:objc_getClass, Ptr{Cvoid}, (Cstring,), "NSView"))
     cls == C_NULL && return nothing
@@ -4543,10 +4564,9 @@ function launchTerminalUI(; cmd::Cmd = defaultTerminalCmd(),
                           auto_terminate = true)
     installFlootyWindowDelegate!(wv)
     registerTerminalBindings!(wv)
+    terminalUiWebview[] = wv
     installWorkspaceNativeDrag!(wv)
     Webviews.navigate!(wv, baseUrl * "index.html")
-
-    terminalUiWebview[] = wv
     terminalUiRunning[] = true
 
     @info "flootyWebUi: terminal UI running" url = baseUrl * "index.html" width height
