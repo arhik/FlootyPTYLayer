@@ -100,6 +100,7 @@ function _computerUseEvaluateRemote(id::String, ch::Channel{String}, script::Str
     wv = activeTerminalUiWebview()
     wv === nothing && return _write_reply_now!(ch, Dict("id" => id, "ok" => false, "error" => "no active webview"))
     Webviews.dispatch(wv) do
+        println("computer-use: wkwebview dispatch entered")
         try
             @info "computer-use: calling page" id script=String(script)
             Webviews.eval!(wv,
