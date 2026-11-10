@@ -6214,6 +6214,7 @@
             };
             const refresh = async () => {
                 const state = await workspaceCall('workspaceState', { terminal_id: currentTerminalId() });
+                try { window.flootyFileDrop && window.flootyFileDrop('refresh ' + JSON.stringify(state)); } catch (_) {}
                 if (state && state.success) hideError();
                 render(state);
                 renderAttention(state);
