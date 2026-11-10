@@ -1760,7 +1760,7 @@
             </div>
             <button id="sessionBtn" title="New session (sibling of the current one)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">+ session</button>
-            <button id="workspaceToggle" title="Toggle workspace sidebar"
+            <button id="workspaceToggle" onclick="if (window.flootyWorkspaceToggle) window.flootyWorkspaceToggle(); else document.getElementById('workspacePanel').classList.toggle('is-open');" title="Toggle workspace sidebar"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">workspace</button>
             <button id="splitBtn" title="Split the pane: Alt+D vertical (side by side), Alt+Shift+D horizontal (stacked)"
                     style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:11px;padding:2px 8px;cursor:pointer;border-radius:4px;">split</button>
@@ -6279,7 +6279,13 @@
             }
             if (close) close.addEventListener('click', () => setOpen(false));
             if (toggle) {
-                toggle.addEventListener('click', () => panel.classList.toggle('is-open'));
+                toggle.addEventListener('click', () => {
+                    if (typeof window.flootyWorkspaceToggle === 'function') {
+                        window.flootyWorkspaceToggle();
+                    } else {
+                        panel.classList.toggle('is-open');
+                    }
+                });
             }
 
             if (tree) {

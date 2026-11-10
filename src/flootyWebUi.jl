@@ -3843,6 +3843,18 @@ function registerTerminalBindings!(wv)
         resp
     end
 
+    Webviews.bind(wv, "flootyWorkspaceToggle") do _
+        resp = try
+            Webviews.eval!(wv,
+                "(function () { const p = document.getElementById('workspacePanel'); if (p) p.classList.toggle('is-open'); if (p) return p.classList.contains('is-open') ? '1' : '0'; return '0'; })();")
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootyWorkspaceToggle failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
     Webviews.bind(wv, "flootyWorkspace") do args
         resp = try
             payload = jsonArgs(args)
