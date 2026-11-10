@@ -94,6 +94,7 @@ function _computerUseEvaluateRemote(id::String, ch::Channel{String}, script::Str
     wv === nothing && return _write_reply_now!(ch, Dict("id" => id, "ok" => false, "error" => "no active webview"))
     Webviews.dispatch(wv) do
         try
+            @info "computer-use: calling page" id script=String(script)
             Webviews.eval!(wv,
                 "window.__computerUseRequest(\"" * escapeJsString(id) * "\", " *
                 JSON.json("{\"id\":\"" * id * "\",\"script\":" * JSON.json(script) * "}") *
