@@ -45,6 +45,8 @@ export launchTerminalUI, runTerminalUI, stopTerminalUI,
     shadowTextFor, shadowLinesFor,
     gridChecksum, terminalDivergence,
     openBrowserWindow!, navigateBrowserWindow!, closeBrowserWindow!, addPdfToolResultHandler!, addPdfInteractionHandler!,
+    addNewTypstHandler!, addTypstTabUi,
+    addEditorEventHandler!, addEditorListHandler!,
     closeAllBrowserWindows!, browserWindowInfo, browserWindowOpen,
     addAgentModelHooks!, agentModelState, setSplitSession!,
     gpuRendererReport, openTerminalWindow, runTerminalWindow

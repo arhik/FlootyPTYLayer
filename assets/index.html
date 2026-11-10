@@ -1039,6 +1039,15 @@
         .workspace.pdf-focus #terminal-container,
         .workspace.pdf-focus #chatResizer { display: none; }
         .workspace.pdf-focus #pdfPanel { display: flex; }
+        .typst-panel { flex: 1; min-width: 0; display: none; overflow: hidden; }
+        .workspace.typst-focus #terminal-container,
+        .workspace.typst-focus #chatResizer { display: none; }
+        .workspace.typst-focus #typstPanel { display: flex; }
+        .workspace.typst-focus #pdfPanel,
+        .workspace.typst-focus #browserPanel { display: none; }
+        #typstEditorHost, #typstPdfHost { min-width: 0; height: 100%; overflow: hidden; }
+        #typstEditorHost { flex: 1.35; border-right: 1px solid rgba(255,255,255,0.08); }
+        #typstPdfHost { flex: 1; }
         #pdfLayerHost { width: 100%; height: 100%; }
         .browser-native-note {
             flex: none;
@@ -1521,6 +1530,14 @@
                 </svg>
                 <span class="session-label">PDF</span>
             </button>
+            <button type="button" class="session-wheel-item" data-session-kind="typst"
+                    title="Typst project" role="menuitem">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 4h10l4 4v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
+                    <path d="M8 11h8M8 15h5M8 19h3"/>
+                </svg>
+                <span class="session-label">Typst</span>
+            </button>
             <button type="button" class="session-wheel-item" data-session-kind="settings"
                     title="Settings" role="menuitem">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1621,6 +1638,10 @@
                 <div id="pdfPanel" class="pdf-panel" hidden>
                     <div id="pdfLayerHost"></div>
                 </div>
+                <section id="typstPanel" class="typst-panel" hidden aria-label="Typst workspace">
+                    <div id="typstEditorHost"></div>
+                    <div id="typstPdfHost"></div>
+                </section>
 
                 <!-- Activity rail — the per-session agent conversation. -->
                 <div id="chatResizer" title="Drag to resize the chat pane (double-click resets)"></div>
@@ -3494,7 +3515,53 @@
         };
 
         // ---- browser tabs ---------------------------------------------------
+        function unmountTypstPane() {
+            if (window.editorLayer && typeof window.editorLayer.unmount === 'function') window.editorLayer.unmount();
+            if (window.typstPdfLayer && typeof window.typstPdfLayer.unmount === 'function') window.typstPdfLayer.unmount();
+            const typstPanel = document.getElementById('typstPanel');
+            if (typstPanel) typstPanel.hidden = true;
+        }
+
+        function activateTypstPane(id) {
+            const info = browserTabs[id];
+            if (!info) return;
+            captureAssistDraft();
+            activeBrowserId = id;
+            activeChatId = null;
+            activeTerminalId = null;
+            activeSplitId = null;
+            const ws = document.querySelector('.workspace');
+            ws && ws.classList.remove('chat-focus', 'browser-focus', 'pdf-focus');
+            ws && ws.classList.add('typst-focus');
+            if (window.pdfLayer && typeof window.pdfLayer.unmount === 'function') window.pdfLayer.unmount();
+            deactivatePdfPane();
+            ws && ws.classList.add('typst-focus');
+            const pdfPanel = document.getElementById('pdfPanel');
+            const browserPanel = document.getElementById('browserPanel');
+            if (pdfPanel) pdfPanel.hidden = true;
+            if (browserPanel) browserPanel.hidden = true;
+            const typstPanel = document.getElementById('typstPanel');
+            if (typstPanel) typstPanel.hidden = false;
+            if (window.editorLayer && typeof window.editorLayer.mount === 'function') window.editorLayer.mount(info.typstEditorId);
+            if (window.typstPdfLayer && typeof window.typstPdfLayer.mount === 'function') window.typstPdfLayer.mount(info.typstPdfId);
+            renderChatStreamTabs(info);
+            chatRenderedFor = null;
+            renderActiveAgentChat();
+            restoreAssistDraft(info);
+            updateLayoutMode();
+            renderContextUsage();
+            renderActiveProgress();
+            renderTabRail();
+        }
+
+        function deactivateTypstPane() {
+            unmountTypstPane();
+            const ws = document.querySelector('.workspace');
+            if (ws) ws.classList.remove('typst-focus');
+        }
+
         function deactivatePdfPane() {
+            deactivateTypstPane();
             if (window.pdfLayer && typeof window.pdfLayer.unmount === 'function') {
                 window.pdfLayer.unmount();
             }
@@ -3515,6 +3582,12 @@
             activeTerminalId = null;
             activeSplitId = null;
             const ws = document.querySelector('.workspace');
+            const isTypst = String(info.url || '').includes('typst:');
+            if (isTypst) {
+                activateTypstPane(id);
+                return;
+            }
+            deactivateTypstPane();
             ws && ws.classList.remove('chat-focus');
             ws && ws.classList.remove('browser-focus');
             ws && ws.classList.remove('pdf-focus');
@@ -3754,6 +3827,36 @@
                     chatStream: 'agent', parent: parentId || null,
                     kind: 'browser', popups: [], exited: false
                 };
+            }
+            activateBrowserTab(id);
+            return id;
+        };
+
+        window.flootyAddTypstTab = function (id, name, projectRoot, editorId, pdfId, rootId, parentId) {
+            if (!id) return id;
+            if (rootId && !CHAT_SESSION_ID) CHAT_SESSION_ID = rootId;
+            const rid = rootId || CHAT_SESSION_ID;
+            if (rid && id !== rid && !chatTabs[rid]) {
+                CHAT_ONLY.name = 'Chat';
+                CHAT_ONLY.kind = 'chat';
+                chatTabs[rid] = CHAT_ONLY;
+                createChatTab(rid, 'Chat');
+            }
+            if (!browserTabs[id]) {
+                browserTabs[id] = {
+                    name: name || 'Typst', juliaId: id,
+                    url: 'typst:' + id,
+                    projectRoot: projectRoot || '', typstEditorId: editorId, typstPdfId: pdfId,
+                    chat: [], monitorChat: [], trajectoryMonitorChat: [], preferencesMonitorChat: [],
+                    chatStream: 'agent', parent: parentId || null,
+                    kind: 'typst', popups: [], exited: false
+                };
+            } else {
+                browserTabs[id].url = 'typst:' + id;
+                browserTabs[id].projectRoot = projectRoot || browserTabs[id].projectRoot || '';
+                browserTabs[id].typstEditorId = editorId || browserTabs[id].typstEditorId;
+                browserTabs[id].typstPdfId = pdfId || browserTabs[id].typstPdfId;
+                browserTabs[id].kind = 'typst';
             }
             activateBrowserTab(id);
             return id;
@@ -5667,6 +5770,17 @@
             if (open) renderChildStrips();
         }
         window.toggleTreeMap = toggleTreeMap;
+        function spawnTypstSession(parentId) {
+            return flootyPrompt('Typst file or project folder', '/path/to/project.typ', '')
+                .then(function (path) {
+                    if (!path) return;
+                    return callJulia('flootyNewTypstSession', JSON.stringify({
+                        parent_id: parentId || '', path: path, name: 'Typst'
+                    }));
+                })
+                .catch(function () {});
+        }
+
         "Spawn a child session from the split radial: terminal/SSH become a split pane; chat/browser become child tabs."
         function spawnSplitSession(kind, opts) {
             opts = opts || {};
@@ -5692,6 +5806,10 @@
                 callJulia('flootyNewPdfSession', JSON.stringify({
                     parent_id: parentSid, path: '/viewer/index.html', name: 'PDF'
                 })).catch(function () {});
+                return;
+            }
+            if (kind === 'typst') {
+                spawnTypstSession(parentSid);
                 return;
             }
             let parentId = null;
@@ -5756,6 +5874,8 @@
                     callJulia('flootyNewPdfSession', JSON.stringify({
                         parent_id: '', path: '/viewer/index.html', name: 'PDF'
                     })).catch(function () {});
+                } else if (kind === 'typst') {
+                    spawnTypstSession('');
                 }
             };
             if (!parent) {
@@ -5783,6 +5903,10 @@
                 callJulia('flootyNewPdfSession', JSON.stringify({
                     parent_id: parent, path: '/viewer/index.html', name: 'PDF'
                 })).catch(function () {});
+                return;
+            }
+            if (kind === 'typst') {
+                spawnTypstSession(parent);
                 return;
             }
             // Terminal/SSH sibling: if the parent is a pane, add it as another
@@ -5848,6 +5972,8 @@
                     callJulia('flootyNewPdfSession', JSON.stringify({
                         parent_id: '', path: '/viewer/index.html', name: 'PDF'
                     })).catch(function () {});
+                } else if (kind === 'typst') {
+                    spawnTypstSession('');
                 } else if (kind === 'ssh') {
                     flootyPrompt('SSH target (user@host)', 'user@host', sshTargetHistory()[0] || '', sshTargetHistory())
                         .then(function (target) {
@@ -5877,6 +6003,8 @@
                 callJulia('flootyNewPdfSession', JSON.stringify({
                     parent_id: parentSid, path: '/viewer/index.html', name: 'PDF'
                 })).catch(function () {});
+            } else if (kind === 'typst') {
+                spawnTypstSession(parentSid);
             } else if (kind === 'ssh') {
                 flootyPrompt('SSH target (user@host)', 'user@host', sshTargetHistory()[0] || '', sshTargetHistory())
                     .then(function (target) {
@@ -5991,6 +6119,11 @@
 
     <script type="module">
         import { mountPdfLayer } from '/viewer/layer.mjs';
+        import { mountEditorLayer } from '/editor/layer.mjs';
+        const typstEditorHost = document.getElementById('typstEditorHost');
+        const typstPdfHost = document.getElementById('typstPdfHost');
+        window.editorLayer = mountEditorLayer(typstEditorHost);
+        window.typstPdfLayer = mountPdfLayer(typstPdfHost);
         window.pdfLayer = mountPdfLayer(document.getElementById('pdfLayerHost'));
     </script>
 

@@ -969,6 +969,9 @@ const NEW_CHAT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const CHAT_CLOSE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_BROWSER_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_PDF_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const NEW_TYPST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const EDITOR_EVENT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const EDITOR_LIST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const BROWSER_NAV_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const PDF_TOOL_RESULT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const PDF_INTERACTION_HANDLER = Ref{Union{Nothing,Function}}(nothing)
@@ -1017,6 +1020,24 @@ end
 "Register `f(parent_id, path, name)` to create a PDFSession."
 function addNewPdfHandler!(f::Function)
     NEW_PDF_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(parent_id, path, name)` to create a Typst compound session."
+function addNewTypstHandler!(f::Function)
+    NEW_TYPST_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(kind, session_id, payload)` for editor events."
+function addEditorEventHandler!(f::Function)
+    EDITOR_EVENT_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(session_id, root)` returning a JSON array of file entries."
+function addEditorListHandler!(f::Function)
+    EDITOR_LIST_HANDLER[] = f
     return nothing
 end
 
@@ -3735,6 +3756,53 @@ function registerTerminalBindings!(wv)
         resp
     end
 
+    Webviews.bind(wv, "flootyEditorEvent") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = EDITOR_EVENT_HANDLER[]
+            handler === nothing && return errorJson("no editor event handler installed")
+            kind = String(get(payload, :kind, get(payload, "kind", "")))
+            sessionId = String(get(payload, :session, get(payload, "session", "")))
+            Base.invokelatest(handler, kind, sessionId, payload)
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootyEditorEvent failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootyEditorListFiles") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = EDITOR_LIST_HANDLER[]
+            handler === nothing && return errorJson("no editor file list handler installed")
+            sessionId = String(get(payload, :session, get(payload, "session", "")))
+            root = String(get(payload, :path, get(payload, "path", "")))
+            files = String(Base.invokelatest(handler, sessionId, root))
+            "{\"success\":true,\"files\":" * files * "}"
+        catch err
+            @error "flootyWebUi: flootyEditorListFiles failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootyNewTypstSession") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = NEW_TYPST_HANDLER[]
+            handler === nothing && return errorJson("no Typst spawner installed")
+            Base.invokelatest(handler, jsonStr(payload, :parent_id),
+                              jsonStr(payload, :path), jsonStr(payload, :name))
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootyNewTypstSession failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
     Webviews.bind(wv, "flootyPdfInteraction") do args
         resp = try
             payload = jsonArgs(args)
@@ -4175,6 +4243,27 @@ function addChatTabUi(wv, id::AbstractString, name::AbstractString = "Chat";
         return true
     catch err
         @debug "flootyWebUi: addChatTabUi failed" exception = err
+        return false
+    end
+end
+
+function addTypstTabUi(wv, id::AbstractString, name::AbstractString,
+                       project_root::AbstractString, editor_id::AbstractString, pdf_id::AbstractString;
+                       root_id::AbstractString = "", parent_id::AbstractString = "")::Bool
+    wv === nothing && return false
+    try
+        Webviews.dispatch(wv) do
+            Webviews.eval!(wv,
+                "if (typeof window.flootyAddTypstTab === 'function') " *
+                "window.flootyAddTypstTab(\"" * escapeJsString(String(id)) * "\", \"" *
+                escapeJsString(String(name)) * "\", \"" * escapeJsString(String(project_root)) *
+                "\", \"" * escapeJsString(String(editor_id)) * "\", \"" *
+                escapeJsString(String(pdf_id)) * "\", \"" * escapeJsString(String(root_id)) *
+                "\", \"" * escapeJsString(String(parent_id)) * "\");")
+        end
+        return true
+    catch err
+        @error "flootyWebUi: addTypstTabUi failed" exception = err
         return false
     end
 end
