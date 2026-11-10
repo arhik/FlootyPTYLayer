@@ -838,6 +838,10 @@
         .file-tree-icon-button { width: 25px; height: 25px; border: 0; border-radius: 5px; background: transparent; color: rgba(219,230,247,0.58); cursor: pointer; font-size: 14px; }
         .file-tree-icon-button:hover { color: #fff; background: rgba(255,255,255,0.08); }
         .file-tree-search { width: calc(100% - 20px); margin: 8px 10px 6px; height: 27px; padding: 0 8px; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.09); border-radius: 5px; outline: none; font: 11px var(--sans, sans-serif); }
+        .file-tree-folder-tabs { display: flex; gap: 6px; padding: 8px 10px 2px; overflow-x: auto; }
+        .file-tree-folder-tab { flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px; background: rgba(255, 255, 255, 0.045); color: rgba(255, 255, 255, 0.62); padding: 4px 10px; font: 10px var(--mono, ui-monospace, monospace); cursor: pointer; white-space: nowrap; }
+        .file-tree-folder-tab:hover { color: #fff; border-color: rgba(255, 255, 255, 0.2); }
+        .file-tree-folder-tab.active { border-color: rgba(212, 175, 90, 0.45); color: rgb(236, 198, 118); background: rgba(212, 175, 90, 0.13); }
         .file-tree-search:focus { border-color: rgba(212,175,90,0.42); }
         .file-tree-columns { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 0 12px 6px; border-bottom: 1px solid rgba(255,255,255,0.055); color: rgba(255,255,255,0.34); font: 9px var(--mono, ui-monospace, monospace); letter-spacing: 0.08em; text-transform: uppercase; }
         .file-tree-list { flex: 1; min-height: 0; overflow: auto; padding: 5px 6px; }
@@ -2096,6 +2100,7 @@
                             <button id="fileTreeClose" class="file-tree-icon-button" type="button" title="Close file tree" aria-label="Close file tree">×</button>
                         </div>
                     </div>
+                    <div id="fileTreeFolderTabs" class="file-tree-folder-tabs" role="tablist"></div>
                     <input id="fileTreeSearch" class="file-tree-search" type="search" placeholder="Filter files" spellcheck="false" aria-label="Filter files">
                     <div class="file-tree-columns" aria-hidden="true"><span>Files</span><span>Git</span></div>
                     <div id="fileTreeList" class="file-tree-list"></div>
@@ -6150,6 +6155,9 @@
             window.handleWorkspaceFileChange = payload => {
                 try {
                     if (!panel.classList.contains('closed')) refresh();
+                    if (typeof refreshFileTreePane === 'function') {
+                        try { refreshFileTreePane(); } catch (_) {}
+                    }
                     const id = payload && payload.folder_id ? String(payload.folder_id) : '';
                     const item = id ? list.querySelector('.folder-item[data-id="' + id.replace(/"/g, '\\"') + '"]') : null;
                     if (item) {
@@ -6218,6 +6226,9 @@
                 if (state && state.success) hideError();
                 render(state);
                 renderAttention(state);
+                if (typeof refreshFileTreePane === 'function') {
+                    try { refreshFileTreePane(); } catch (_) {}
+                }
             };
             const renderFolder = f => {
                 const locked = f.locked === true;
@@ -6376,8 +6387,19 @@
         "Render the dedicated file-tree session pane from the workspace API."
         let fileTreeFilter = '';
         let fileTreeWorkspace = null;
+        let fileTreeActiveFolderId = '';
+        let fileTreeCollapsed = new Set();
+        try { fileTreeActiveFolderId = localStorage.getItem('flooty.filetree.activeFolderId') || ''; } catch (_) {}
+        try { fileTreeCollapsed = new Set(JSON.parse(localStorage.getItem('flooty.filetree.collapsed') || '[]')); } catch (_) {}
         function fileTreeEsc(str) {
             return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+        }
+        function relToRepo(path, repoRoot) {
+            if (!repoRoot) return null;
+            const normalize = x => String(x).replace(/\\/g, '/').replace(/\/+$/, '');
+            const pp = normalize(path);
+            const root = normalize(repoRoot) + '/';
+            return pp.startsWith(root) ? pp.slice(root.length) : null;
         }
         function fileMatches(entry) {
             if (!fileTreeFilter) return true;
@@ -6386,6 +6408,21 @@
             if (haystack.includes(needle)) return true;
             return (entry.children || []).some(fileMatches);
         }
+        function collapseKey(folderId, path) {
+            return String(folderId) + '::' + String(path);
+        }
+        function persistFileTreeState() {
+            try { localStorage.setItem('flooty.filetree.activeFolderId', fileTreeActiveFolderId); } catch (_) {}
+            try { localStorage.setItem('flooty.filetree.collapsed', JSON.stringify([...fileTreeCollapsed])); } catch (_) {}
+        }
+        function toggleFileTreeDirectory(row, list, folderId, repoRoot) {
+            const path = row.dataset.path || '';
+            const key = collapseKey(folderId, path);
+            if (fileTreeCollapsed.has(key)) fileTreeCollapsed.delete(key);
+            else fileTreeCollapsed.add(key);
+            persistFileTreeState();
+            refreshFileTreePane();
+        }
         function renderTreeRows(entries, list, depth, folderId, repoRoot) {
             for (const entry of entries) {
                 if (!fileMatches(entry)) continue;
@@ -6393,6 +6430,7 @@
                 const relPath = isDirectory ? null : relToRepo(entry.path, repoRoot);
                 const status = (!isDirectory && relPath && fileTreeWorkspace)
                     ? fileTreeWorkspace.changesByPath.get(relPath) || '' : '';
+                const collapsed = isDirectory && fileTreeCollapsed.has(collapseKey(folderId, entry.path));
                 const row = document.createElement('button');
                 row.type = 'button';
                 row.className = 'file-tree-row ' + (isDirectory ? 'dir' : 'file');
@@ -6400,28 +6438,26 @@
                 row.dataset.path = String(entry.path || '');
                 row.dataset.folderId = folderId;
                 row.dataset.isDir = String(isDirectory);
+                row.setAttribute('aria-expanded', isDirectory ? String(!collapsed) : 'false');
                 row.innerHTML =
-                    '<span class="file-tree-icon">' + (isDirectory ? '▸' : status ? status[0] : '◆') + '</span>' +
+                    '<span class="file-tree-icon">' + (isDirectory ? (collapsed ? '▸' : '▾') : status ? status[0] : '◆') + '</span>' +
                     '<span class="file-tree-name">' + fileTreeEsc(entry.name || '') + '</span>' +
                     '<span class="file-tree-meta">' + (isDirectory ? '' : (status || '')) + '</span>';
                 row.addEventListener('click', event => {
                     event.preventDefault();
                     list.querySelectorAll('.file-tree-row').forEach(item => item.classList.toggle('selected', item === row));
-                    if (isDirectory) return;
+                    if (isDirectory) {
+                        row.setAttribute('aria-expanded', String(collapsed));
+                        toggleFileTreeDirectory(row, list, folderId, repoRoot);
+                        return;
+                    }
                     openWorkspaceFile(row.dataset.path, folderId);
                 });
                 list.appendChild(row);
-                if (isDirectory && Array.isArray(entry.children)) {
+                if (isDirectory && Array.isArray(entry.children) && !collapsed) {
                     renderTreeRows(entry.children, list, depth + 1, folderId, repoRoot);
                 }
             }
-        }
-        function relToRepo(path, repoRoot) {
-            if (!repoRoot) return null;
-            const normalize = x => String(x).replace(/\\/g, '/').replace(/\/+$/, '');
-            const p = normalize(path);
-            const root = normalize(repoRoot) + '/';
-            return p.startsWith(root) ? p.slice(root.length) : null;
         }
         function countTreeEntries(entries) {
             let count = 0;
@@ -6432,11 +6468,33 @@
             entries.forEach(walk);
             return count;
         }
+        function renderFolderTabs(folders, listEl) {
+            if (!listEl) return;
+            listEl.replaceChildren();
+            for (const folder of folders) {
+                const id = String(folder.id || '');
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'file-tree-folder-tab' + (id === fileTreeActiveFolderId ? ' active' : '');
+                chip.textContent = folder.name || folder.path || '(folder)';
+                chip.title = folder.path || '';
+                chip.setAttribute('role', 'tab');
+                chip.setAttribute('aria-selected', String(id === fileTreeActiveFolderId));
+                chip.addEventListener('click', () => {
+                    if (fileTreeActiveFolderId === id) return;
+                    fileTreeActiveFolderId = id;
+                    persistFileTreeState();
+                    refreshFileTreePane();
+                });
+                listEl.appendChild(chip);
+            }
+        }
         async function refreshFileTreePane() {
             const list = document.getElementById('fileTreeList');
             const count = document.getElementById('fileTreeCount');
             const git = document.getElementById('fileTreeGit');
-            if (!list || !count || !git) return;
+            const tabs = document.getElementById('fileTreeFolderTabs');
+            if (!list || !count || !git || !tabs) return;
             const sessionId = activeFileTreeId || '';
             list.innerHTML = '<div class="file-tree-empty">Loading…</div>';
             const [files, changes] = await Promise.all([
@@ -6446,7 +6504,18 @@
                     .catch(() => ({ success: false, error: 'No repository' }))
             ]);
             const folders = (files && files.folders) || [];
-            const tree = (files && files.tree) || [];
+            tabs.replaceChildren();
+            if (folders.length) {
+                if (!fileTreeActiveFolderId || !folders.some(f => String(f.id || '') === fileTreeActiveFolderId)) {
+                    fileTreeActiveFolderId = String(folders[0].id || '');
+                    persistFileTreeState();
+                }
+                renderFolderTabs(folders, tabs);
+            }
+            const active = folders.find(f => String(f.id || '') === fileTreeActiveFolderId) || folders[0] || null;
+            const treeEntry = active && Array.isArray(files && files.tree)
+                ? (files.tree || []).find((root, index) => files.folders && index < files.folders.length && String(files.folders[index].id || '') === String(active.id))
+                : null;
             const repoRoot = changes && changes.repository ? String(changes.repository) : '';
             const changesByPath = new Map();
             if (changes && Array.isArray(changes.files)) {
@@ -6456,37 +6525,25 @@
             }
             fileTreeWorkspace = { changesByPath, repoRoot };
             list.replaceChildren();
-            tree.forEach((root, index) => {
-                const folder = folders[index] || null;
-                const folderId = folder ? String(folder.id || '') : '';
-                if (!root) return;
-                if (root.error) {
-                    const rootRow = document.createElement('div');
-                    rootRow.className = 'file-tree-root';
-                    rootRow.innerHTML = '<span class="file-tree-icon">⚠</span><span class="file-tree-name">' + fileTreeEsc(root.name || '(folder)') + '</span>';
-                    list.appendChild(rootRow);
-                    const errRow = document.createElement('div');
-                    errRow.className = 'file-tree-empty';
-                    errRow.textContent = String(root.error);
-                    list.appendChild(errRow);
-                    return;
-                }
-                const rootRow = document.createElement('button');
-                rootRow.type = 'button';
-                rootRow.className = 'file-tree-root';
-                rootRow.innerHTML =
-                    '<span class="file-tree-icon">◆</span>' +
-                    '<span class="file-tree-name">' + fileTreeEsc(root.name || root.path || '(folder)') + '</span>' +
-                    '<span class="file-tree-meta">' + (folder && Array.isArray(folder.permissions)
-                        ? folder.permissions.map(p => String(p)[0].toUpperCase()).join(' ') : '') + '</span>';
-                rootRow.title = String(root.path || '');
-                list.appendChild(rootRow);
-                renderTreeRows(root.children || [], list, 0, folderId, repoRoot);
-            });
-            if (!tree.length) {
+            if (!active || !treeEntry) {
                 list.innerHTML = '<div class="file-tree-empty">No granted folders yet.<br>Add folders in the workspace panel on the right.</div>';
+                count.textContent = '0 entries';
+                git.textContent = 'No repository';
+                git.title = '';
+                return;
             }
-            count.textContent = String(countTreeEntries(tree)) + ' entries';
+            const rootRow = document.createElement('button');
+            rootRow.type = 'button';
+            rootRow.className = 'file-tree-root';
+            rootRow.innerHTML =
+                '<span class="file-tree-icon">◆</span>' +
+                '<span class="file-tree-name">' + fileTreeEsc(rootName(rootEntrySafe(treeEntry, active) || active.path || '(folder)')) + '</span>' +
+                '<span class="file-tree-meta">' + (Array.isArray(active.permissions)
+                    ? active.permissions.map(p => String(p)[0].toUpperCase()).join(' ') : '') + '</span>';
+            rootRow.title = String(active.path || '');
+            list.appendChild(rootRow);
+            renderTreeRows((treeEntry && treeEntry.children) || [], list, 0, String(active.id || ''), repoRoot);
+            count.textContent = String(countTreeEntries([treeEntry])) + ' entries';
             if (changes && changes.success) {
                 git.textContent = String(changes.changed || 0) + ' changed · ' +
                     String(changes.staged || 0) + ' staged · ' +
@@ -6496,6 +6553,14 @@
                 git.textContent = (changes && changes.error) ? String(changes.error) : 'No repository';
                 git.title = '';
             }
+        }
+        function rootName(path) {
+            const parts = String(path || '').split(/[\\/]+/).filter(Boolean);
+            return parts.length ? parts[parts.length - 1] : String(path || 'Workspace');
+        }
+        function rootEntrySafe(treeEntry, active) {
+            if (treeEntry && treeEntry.path) return treeEntry.path;
+            return active && active.path ? active.path : 'Workspace';
         }
         function languageForPath(path) {
             const ext = String(path || '').split('.').pop().toLowerCase();
