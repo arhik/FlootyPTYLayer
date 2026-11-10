@@ -6251,6 +6251,8 @@
             };
             const mutate = async (name, payload) => {
                 const result = await workspaceCall(name, payload);
+                console.log('workspace mutate', name, result);
+                try { window.flootyFileDrop && window.flootyFileDrop('mutate ' + name + ' = ' + JSON.stringify(result)); } catch (_) {}
                 if (result && !result.success) showError(result.error || `${name} failed`);
                 await refresh();
                 return result;
