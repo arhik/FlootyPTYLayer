@@ -71,9 +71,10 @@ function _computerUseClientLoop(sock)
             println(sock, JSON.json(Dict("id" => "", "ok" => false, "error" => string("parse: ", sprint(showerror, err)))))
             continue
         end
-        id = String(get(msg, :id, ""))
-        op = String(get(msg, :op, ""))
-        params = get(msg, :params, Dict{String, Any}())
+        id = String(get(msg, "id", ""))
+        op = String(get(msg, "op", ""))
+        params = get(msg, "params", Dict{String, Any}())
+        @info "computer-use: parsed request" id op
         ch = Channel{String}(1)
         COMPUTER_USE_PENDING[id] = ch
         try
@@ -85,7 +86,7 @@ function _computerUseClientLoop(sock)
                 _computerUseScreenshot(id, ch)
             else
                 delete!(COMPUTER_USE_PENDING, id)
-                _write_reply(sock, Dict("id" => id, "ok" => false, "error" => string("unknown op: ", op)))
+                _write_reply!(ch, Dict("id" => id, "ok" => false, "error" => string("unknown op: ", op)))
             end
         catch err
             try delete!(COMPUTER_USE_PENDING, id) catch; end
