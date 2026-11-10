@@ -3556,12 +3556,16 @@
 
         "Computer-use bridge: receives JS requests from the Julia debug pipe and replies via a bound Julia function."
         window.__computerUseRequest = async function (id, req) {
+            const trace = m => { try { window.flootyFileDrop && window.flootyFileDrop('computer-use: ' + m); } catch (_) {} };
+            trace('request received');
             try {
                 const script = String(req && req.script || '');
                 const value = await (0, eval)(script);
-                callJulia('computerUseResult', JSON.stringify({ id: id, ok: true, result: value })).catch(function () {});
+                callJulia('computerUseResult', JSON.stringify({ id: id, ok: true, result: value })).catch(e => trace('Julia callback failed: ' + e));
+                trace('request ok');
             } catch (e) {
-                callJulia('computerUseResult', JSON.stringify({ id: id, ok: false, error: e && e.message ? String(e.message) : String(e) })).catch(function () {});
+                callJulia('computerUseResult', JSON.stringify({ id: id, ok: false, error: e && e.message ? String(e.message) : String(e) })).catch(e2 => trace('Julia callback failed: ' + e2));
+                trace('request error: ' + (e && e.message ? e.message : String(e)));
             }
         };
 
