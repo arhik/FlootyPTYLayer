@@ -5770,15 +5770,14 @@
             if (open) renderChildStrips();
         }
         window.toggleTreeMap = toggleTreeMap;
+        const TYPST_DEV_ROOT = '/Users/arhik/tmp/typst_example';
+
         function spawnTypstSession(parentId) {
-            return flootyPrompt('Typst file or project folder', '/path/to/project.typ', '')
-                .then(function (path) {
-                    if (!path) return;
-                    return callJulia('flootyNewTypstSession', JSON.stringify({
-                        parent_id: parentId || '', path: path, name: 'Typst'
-                    }));
-                })
-                .catch(function () {});
+            // Temporary development shortcut: this project was used to test the
+            // compound Typst session before folder selection is finalized.
+            return callJulia('flootyNewTypstSession', JSON.stringify({
+                parent_id: parentId || '', path: TYPST_DEV_ROOT, name: 'Typst'
+            })).catch(function () {});
         }
 
         "Spawn a child session from the split radial: terminal/SSH become a split pane; chat/browser become child tabs."
