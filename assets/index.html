@@ -3217,7 +3217,14 @@
         function glyphOf(e) {
             if (e.kind === 'terminal')
                 return (e.info && e.info.kind === 'ssh') ? 'S' : '>_';
-            return e.kind === 'browser' ? 'B' : e.kind === 'chat' ? 'C' : '?';
+            if (e.kind === 'browser') {
+                const url = String((e.info && e.info.url) || '');
+                if (url.startsWith('filetree:')) return 'F';
+                if (url.includes('/viewer/')) return 'P';
+                if (url.includes('typst:')) return 'Y';
+                return 'B';
+            }
+            return e.kind === 'chat' ? 'C' : '?';
         }
 
         function activateEntry(e) {
@@ -6189,6 +6196,19 @@
                 applyLayout(state);
                 workspaceFolders = Array.isArray(state.folders) ? state.folders : [];
                 draw();
+            };
+            const renderAttention = state => {
+                if (attentionBadge) {
+                    const folders = state && Array.isArray(state.folders) ? state.folders : [];
+                    const attention = folders.filter(f => f.attention === true).length;
+                    attentionBadge.textContent = attention ? '· ' + attention + ' need access' : '';
+                }
+            };
+            const refresh = async () => {
+                const state = await workspaceCall('workspaceState', { terminal_id: currentTerminalId() });
+                if (state && state.success) hideError();
+                render(state);
+                renderAttention(state);
             };
             const renderFolder = f => {
                 const locked = f.locked === true;

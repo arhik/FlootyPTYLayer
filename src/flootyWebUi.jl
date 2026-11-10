@@ -971,6 +971,11 @@ const NEW_BROWSER_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_PDF_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_TYPST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const NEW_FILETREE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const FILETREE_CLOSE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const SETTINGS_FILE = Ref{AbstractString}(joinpath(homedir(), ".flooty", "settings.json"))
+const DEFAULT_SETTINGS = Dict("blur" => 12, "gain" => 1.0, "scrim" => 0.55,
+                             "saturation" => 1.1, "wallOpacity" => 1.0,
+                             "uiOpacity" => 1.0, "grain" => 0.05)
 const EDITOR_EVENT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_LIST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_TOGGLE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
@@ -1043,6 +1048,12 @@ end
 "Register `f(parent_id, folder_id, name)` to create a File tree session."
 function addNewFileTreeHandler!(f::Function)
     NEW_FILETREE_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(session_id)` to close a File tree session."
+function addFileTreeCloseHandler!(f::Function)
+    FILETREE_CLOSE_HANDLER[] = f
     return nothing
 end
 
@@ -4182,6 +4193,67 @@ function registerTerminalBindings!(wv)
         catch err
             @error "flootyWebUi: flootyWorkspace failed" exception = err
             errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "fileTreeClose") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = FILETREE_CLOSE_HANDLER[]
+            handler === nothing && return errorJson("no file tree closer installed")
+            session_id = String(get(payload, :session_id, get(payload, "session_id", "")))
+            isempty(strip(session_id)) && return errorJson("missing file tree session id")
+            Base.invokelatest(handler, session_id)
+            jsonOk()
+        catch err
+            @error "flootyWebUi: fileTreeClose failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootySettingsLoad") do args
+        resp = try
+            f = SETTINGS_FILE[]
+            settings = copy(DEFAULT_SETTINGS)
+            if isfile(f)
+                try
+                    stored = JSON.parse(read(f, String))
+                    if stored isa Dict
+                        for key in keys(DEFAULT_SETTINGS)
+                            haskey(stored, key) && (settings[key] = stored[key])
+                        end
+                    end
+                catch err
+                    @warn "flootyWebUi: could not read settings; using defaults" exception = err
+                end
+            end
+            resp = Dict("success" => true, "settings" => settings)
+            JSON.json(resp)
+        catch err
+            @error "flootyWebUi: flootySettingsLoad failed" exception = err
+            errorJson("could not read settings")
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootySettingsSave") do args
+        resp = try
+            payload = jsonArgs(args)
+            candidate = get(payload, :settings, get(payload, "settings", Dict()))
+            settings = copy(DEFAULT_SETTINGS)
+            if candidate isa Dict
+                for key in keys(DEFAULT_SETTINGS)
+                    haskey(candidate, key) && (settings[key] = candidate[key])
+                end
+            end
+            mkpath(dirname(SETTINGS_FILE[]))
+            write(SETTINGS_FILE[], JSON.json(settings))
+            jsonOk()
+        catch err
+            @error "flootyWebUi: flootySettingsSave failed" exception = err
+            errorJson("could not save settings")
         end
         resp
     end
