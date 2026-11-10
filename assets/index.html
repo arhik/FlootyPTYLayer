@@ -1049,6 +1049,40 @@
         #typstEditorHost { flex: 1.35; border-right: 1px solid rgba(255,255,255,0.08); }
         #typstPdfHost { flex: 1; }
         #pdfLayerHost { width: 100%; height: 100%; }
+        .workspace-panel {
+            flex: 0 0 240px;
+            min-width: 190px;
+            max-width: 320px;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            background: rgba(19, 19, 28, 0.92);
+            border-right: 1px solid rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(20px);
+            z-index: 20;
+        }
+        .workspace-panel.is-open { display: flex; }
+        .workspace-panel-head { height: 34px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+        .workspace-panel-title { color: rgba(219, 230, 247, 0.38); font: 10px var(--mono, ui-monospace, monospace); letter-spacing: 0.08em; text-transform: uppercase; }
+        .workspace-panel-actions { display: flex; gap: 4px; }
+        .workspace-icon-button { width: 25px; height: 25px; border: 0; border-radius: 5px; background: transparent; color: rgba(219,230,247,0.52); cursor: pointer; font-size: 14px; }
+        .workspace-icon-button:hover { color: #fff; background: rgba(255,255,255,0.07); }
+        .workspace-root { flex: none; padding: 8px 10px 10px; border-bottom: 1px solid rgba(255,255,255,0.055); }
+        .workspace-root-name { color: #fff; font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .workspace-root-path { margin-top: 2px; color: rgba(219,230,247,0.42); font: 10px var(--mono, ui-monospace, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .workspace-root-buttons { display: flex; gap: 5px; margin-top: 8px; }
+        .workspace-root-button { height: 23px; padding: 0 7px; border: 1px solid rgba(255,255,255,0.095); border-radius: 4px; background: rgba(255,255,255,0.04); color: rgba(219,230,247,0.72); font-size: 11px; cursor: pointer; }
+        .workspace-root-button:hover { color: #fff; background: rgba(255,255,255,0.07); }
+        .workspace-tree { flex: 1; overflow: auto; padding: 6px; }
+        .workspace-entry { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; height: 26px; padding: 0 7px; border: 0; border-radius: 5px; color: rgba(219,230,247,0.65); background: transparent; text-align: left; cursor: pointer; }
+        .workspace-entry:hover { background: rgba(255,255,255,0.055); color: #fff; }
+        .workspace-entry:focus-visible { outline: 2px solid var(--accent, #ffd84d); outline-offset: -2px; }
+        .workspace-entry.selected { color: var(--accent, #ffd84d); background: rgba(255,216,77,0.065); }
+        .workspace-entry-icon { flex: none; width: 13px; color: #7dcfff; font-size: 10px; text-align: center; }
+        .workspace-entry.is-dir .workspace-entry-icon { color: #ffd84d; }
+        .workspace-entry-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .workspace-empty { padding: 18px 7px; color: rgba(219,230,247,0.37); font-size: 12px; text-align: center; line-height: 1.5; }
+        .browser-native-note {
         .browser-native-note {
             flex: none;
             font: 10px Menlo, Consolas, monospace;
@@ -1625,6 +1659,25 @@
                  level); no nested tree in the left rail. -->
             <div id="childTabs" class="child-tabs"></div>
             <div class="workspace-body">
+                <aside id="workspacePanel" class="workspace-panel" aria-label="Workspace">
+                    <div class="workspace-panel-head">
+                        <div class="workspace-panel-title">Workspace</div>
+                        <div class="workspace-panel-actions">
+                            <button id="workspaceAdd" class="workspace-icon-button" type="button" title="Add folder" aria-label="Add folder">+</button>
+                            <button id="workspaceRefresh" class="workspace-icon-button" type="button" title="Refresh files" aria-label="Refresh files">↻</button>
+                            <button id="workspaceClose" class="workspace-icon-button" type="button" title="Hide workspace" aria-label="Hide workspace">×</button>
+                        </div>
+                    </div>
+                    <div id="workspaceRoot" class="workspace-root">
+                        <div id="workspaceRootName" class="workspace-root-name">No workspace</div>
+                        <div id="workspaceRootPath" class="workspace-root-path">Choose a project folder to get started.</div>
+                        <div class="workspace-root-buttons">
+                            <button id="workspaceChange" class="workspace-root-button" type="button">Change…</button>
+                            <button id="workspaceRename" class="workspace-root-button" type="button">Rename</button>
+                        </div>
+                    </div>
+                    <div id="workspaceTree" class="workspace-tree" role="tree" aria-label="Project files" aria-activedescendant=""></div>
+                </aside>
                 <div class="terminal-container" id="terminal-container"></div>
                 <div id="browserPanel" class="browser-panel" hidden>
                     <div class="browser-bar">
@@ -6126,6 +6179,134 @@
         window.editorLayer = mountEditorLayer(typstEditorHost);
         window.typstPdfLayer = mountPdfLayer(typstPdfHost);
         window.pdfLayer = mountPdfLayer(document.getElementById('pdfLayerHost'));
+    </script>
+
+    <script>
+        (function installWorkspacePanel() {
+            const panel = document.getElementById('workspacePanel');
+            const rootName = document.getElementById('workspaceRootName');
+            const rootPath = document.getElementById('workspaceRootPath');
+            const tree = document.getElementById('workspaceTree');
+            const add = document.getElementById('workspaceAdd');
+            const refresh = document.getElementById('workspaceRefresh');
+            const change = document.getElementById('workspaceChange');
+            const close = document.getElementById('workspaceClose');
+
+            function escapeHtml(value) {
+                return String(value ?? '').replace(/[&<>"']/g, c => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+                }[c]));
+            }
+
+            function setOpen(open) {
+                if (!panel) return;
+                panel.classList.toggle('is-open', Boolean(open));
+                try { localStorage.setItem('flooty:workspace-open', open ? '1' : '0'); } catch (_e) {}
+            }
+
+            function renderEntries(entries) {
+                if (!tree) return;
+                const rows = Array.isArray(entries) ? entries : [];
+                if (!rows.length) {
+                    tree.innerHTML = '<div class="workspace-empty">Empty workspace</div>';
+                    return;
+                }
+                tree.innerHTML = rows.map(entry => {
+                    const depth = Math.max(0, Number(entry.depth) || 0);
+                    const icon = entry.isDir ? (entry.expanded ? '▾' : '▸') : '◆';
+                    const path = String(entry.path || '');
+                    return '<button class="workspace-entry' + (entry.isDir ? ' is-dir' : '') + '" type="button" ' +
+                        'role="treeitem" aria-level="' + (depth + 1) + '" aria-expanded="' + String(Boolean(entry.expanded)) + '" ' +
+                        'data-path="' + escapeHtml(path) + '" data-is-dir="' + String(Boolean(entry.isDir)) + '" ' +
+                        'style="padding-left:' + (10 + depth * 15) + 'px">' +
+                        '<span class="workspace-entry-icon">' + icon + '</span>' +
+                        '<span class="workspace-entry-name">' + escapeHtml(entry.name) + '</span>' +
+                    '</button>';
+                }).join('');
+            }
+
+            function rootNameFor(path) {
+                const normalized = String(path || '').replace(/\/g, '/');
+                if (!normalized || normalized === '/') return normalized || 'Workspace';
+                const parts = normalized.split('/').filter(Boolean);
+                return parts.length ? parts[parts.length - 1] : normalized;
+            }
+
+            function updateMeta(meta) {
+                const path = String(meta && meta.path || '');
+                if (rootName) rootName.textContent = path ? rootNameFor(path) : 'No workspace';
+                if (rootPath) rootPath.textContent = path || 'Choose a project folder to get started.';
+                if (tree) tree.setAttribute('aria-activedescendant', '');
+            }
+
+            function loadWorkspace(root) {
+                const requested = root == null ? '' : String(root);
+                return callJulia('flootyWorkspace', JSON.stringify({ kind: 'state', root: requested }))
+                    .then(result => {
+                        if (!result || result.success === false) {
+                            throw new Error(result && result.error || 'Could not load workspace');
+                        }
+                        updateMeta(result);
+                        renderEntries(result.entries || []);
+                        setOpen(true);
+                        return result;
+                    })
+                    .catch(error => {
+                        if (rootPath) rootPath.textContent = String(error && error.message || error);
+                        if (tree) tree.innerHTML = '<div class="workspace-empty">Could not open folder</div>';
+                        setOpen(true);
+                        return null;
+                    });
+            }
+
+            if (add) {
+                add.addEventListener('click', async () => {
+                    const existing = rootPath && !rootPath.textContent.includes('Choose') ? rootPath.textContent.trim() : '/';
+                    const path = await flootyPrompt('Project folder', '/path/to/project', existing);
+                    if (path && String(path).trim()) loadWorkspace(String(path).trim());
+                });
+            }
+            if (refresh) refresh.addEventListener('click', () => loadWorkspace(rootPath ? rootPath.textContent.trim() : ''));
+            if (change) {
+                change.addEventListener('click', async () => {
+                    const existing = rootPath ? rootPath.textContent.trim() : '/';
+                    const path = await flootyPrompt('Project folder', '/path/to/project', existing);
+                    if (path && String(path).trim()) loadWorkspace(String(path).trim());
+                });
+            }
+            if (close) close.addEventListener('click', () => setOpen(false));
+
+            if (tree) {
+                tree.addEventListener('click', event => {
+                    const button = event.target.closest('.workspace-entry');
+                    if (!button) return;
+                    event.preventDefault();
+                    tree.querySelectorAll('.workspace-entry').forEach(item => item.classList.toggle('selected', item === button));
+                    if (button.dataset.isDir === 'true') {
+                        callJulia('flootyWorkspace', JSON.stringify({ kind: 'toggle', path: button.dataset.path }))
+                            .then(result => renderEntries(result && result.entries || []))
+                            .catch(error => { if (rootPath) rootPath.textContent = String(error && error.message || error); });
+                        return;
+                    }
+                    const editor = window.editorLayer && typeof window.editorLayer.api === 'function' ? window.editorLayer.api() : null;
+                    const session = editor && typeof editor.session === 'function' ? editor.session() : '';
+                    if (!session) return;
+                    callJulia('flootyEditorRead', JSON.stringify({ session, path: button.dataset.path }))
+                        .then(result => {
+                            if (!result || result.success === false) throw new Error(result && result.error || 'could not read file');
+                            return editor.setDocument({ path: result.path, content: result.content, language: 'typst', saved: true });
+                        })
+                        .catch(error => { if (rootPath) rootPath.textContent = String(error && error.message || error); });
+                });
+            }
+
+            try {
+                if (localStorage.getItem('flooty:workspace-open') === '0') panel.classList.remove('is-open');
+                else loadWorkspace('');
+            } catch (_e) {
+                loadWorkspace('');
+            }
+        })();
     </script>
 
     <script type="module">

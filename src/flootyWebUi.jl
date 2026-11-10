@@ -973,6 +973,8 @@ const NEW_TYPST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_EVENT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_LIST_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const EDITOR_TOGGLE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const EDITOR_READ_HANDLER = Ref{Union{Nothing,Function}}(nothing)
+const WORKSPACE_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const BROWSER_NAV_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const PDF_TOOL_RESULT_HANDLER = Ref{Union{Nothing,Function}}(nothing)
 const PDF_INTERACTION_HANDLER = Ref{Union{Nothing,Function}}(nothing)
@@ -1045,6 +1047,18 @@ end
 "Register `f(session_id, root, path)` returning a JSON array of file entries."
 function addEditorToggleHandler!(f::Function)
     EDITOR_TOGGLE_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(session_id, path)` to return the authorized file content."
+function addEditorReadHandler!(f::Function)
+    EDITOR_READ_HANDLER[] = f
+    return nothing
+end
+
+"Register `f(kind, session_id, payload)` for generic workspace actions."
+function addWorkspaceHandler!(f::Function)
+    WORKSPACE_HANDLER[] = f
     return nothing
 end
 
@@ -3765,6 +3779,21 @@ function registerTerminalBindings!(wv)
         resp
     end
 
+    Webviews.bind(wv, "flootyEditorRead") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = EDITOR_READ_HANDLER[]
+            handler === nothing && return errorJson("no editor file reader installed")
+            sessionId = String(get(payload, :session, get(payload, "session", "")))
+            path = String(get(payload, :path, get(payload, "path", "")))
+            String(Base.invokelatest(handler, sessionId, path))
+        catch err
+            @error "flootyWebUi: flootyEditorRead failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
     Webviews.bind(wv, "flootyEditorEvent") do args
         resp = try
             payload = jsonArgs(args)
@@ -3809,6 +3838,22 @@ function registerTerminalBindings!(wv)
             "{\"success\":true,\"files\":" * files * "}"
         catch err
             @error "flootyWebUi: flootyEditorToggleDirectory failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
+    Webviews.bind(wv, "flootyWorkspace") do args
+        resp = try
+            payload = jsonArgs(args)
+            handler = WORKSPACE_HANDLER[]
+            handler === nothing && return errorJson("no workspace handler installed")
+            kind = String(get(payload, :kind, get(payload, "kind", "")))
+            sessionId = String(get(payload, :session, get(payload, "session", "")))
+            result = String(Base.invokelatest(handler, kind, sessionId, payload))
+            result
+        catch err
+            @error "flootyWebUi: flootyWorkspace failed" exception = err
             errorJson(sprint(showerror, err))
         end
         resp
