@@ -19,9 +19,10 @@ function startComputerUseServer!(; port::Int=0, host::String="127.0.0.1")
     lock(COMPUTER_USE_LOCK) do
         COMPUTER_USE_PORT[] != 0 && return COMPUTER_USE_PORT[]
         server = Sockets.listen(UInt16(port))
-        port = Int(server.port)
+        _host, port = Sockets.getsockname(server)
+        port = Int(port)
         COMPUTER_USE_PORT[] = port
-        @info "computer-use: listening" host=string(host) port
+        @info "computer-use: listening" host port
         ENV["FLOOTY_COMPUTER_USE_PORT"] = string(port)
         open(joinpath(tempdir(), "flooty-computer-use.port"), "w") do io
             write(io, string(port))
