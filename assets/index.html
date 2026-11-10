@@ -1856,7 +1856,9 @@
                     if (result && result.success && result.chatSession) {
                         CHAT_SESSION_ID = result.chatSession;
                     }
-                    if (!(result && result.success && result.skipAutocreate === '1')) {
+                    if (result && result.success && result.autoSpawnTypst === '1') {
+                        spawnTypstSession('');
+                    } else if (!(result && result.success && result.skipAutocreate === '1')) {
                         createTerminal();
                         setTimeout(forceFitActive, 50);
                         setTimeout(forceFitActive, 200);

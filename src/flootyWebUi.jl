@@ -3467,10 +3467,11 @@ function registerTerminalBindings!(wv)
     Webviews.bind(wv, "flootyUiReady") do _
         autoclose = get(ENV, "FLOOTY_UI_AUTOCLOSE", "") == "1"
         popupProbe = get(ENV, "FLOOTY_AGENT_POPUP_PROBE", "") == "1"
-        # Warp-style single-PTY embedding: caller adopts its own session and
-        # the page must NOT spawn its own default terminal.
         cfg = terminalUiConfig[]
-        skipAuto = get(ENV, "FLOOTY_UI_SKIP_AUTOCREATE", "") == "1" || cfg.chatOnly
+        # Temporary launch behavior: open the hard-coded development Typst
+        # project instead of prompting for a terminal/path.
+        autoTypst = lowercase(get(ENV, "FLOOTY_AUTO_TYPST", "true")) in ("1", "true", "yes")
+        skipAuto = get(ENV, "FLOOTY_UI_SKIP_AUTOCREATE", "") == "1" || cfg.chatOnly || autoTypst
         if popupProbe
             pushAgentFeedbackToWindow(wv, "Flooty Agent",
                 "Monitoring this session. Long-running statements get an insight popup.",
@@ -3483,6 +3484,7 @@ function registerTerminalBindings!(wv)
         autoclose && push!(parts, "\"action\":\"autoclose\"")
         popupProbe && push!(parts, "\"popupProbe\":\"1\"")
         skipAuto && push!(parts, "\"skipAutocreate\":\"1\"")
+        autoTypst && push!(parts, "\"autoSpawnTypst\":\"1\"")
         chatProvider = CHAT_SESSION_PROVIDER[]
         if chatProvider !== nothing
             try
