@@ -3554,6 +3554,60 @@
             reportGpuState();
         }
 
+        "Computer-use bridge: receives JS requests from the Julia debug pipe and replies via a bound Julia function."
+        window.__computerUseRequest = async function (id, req) {
+            try {
+                const script = String(req && req.script || '');
+                const value = await (0, eval)(script);
+                callJulia('computerUseResult', JSON.stringify({ id: id, ok: true, result: value })).catch(function () {});
+            } catch (e) {
+                callJulia('computerUseResult', JSON.stringify({ id: id, ok: false, error: e && e.message ? String(e.message) : String(e) })).catch(function () {});
+            }
+        };
+
+        "Computer-use: synthesize DOM mouse/keyboard events into the live page."
+        window.__computerUseAct = function (action) {
+            try {
+                if (!action || !action.op) return;
+                const param = action.params || {};
+                if (action.op === 'mouse') {
+                    const target = param.elementId ? document.getElementById(param.elementId)
+                        : document.elementFromPoint(Number(param.x || 0), Number(param.y || 0));
+                    if (!target) return;
+                    const type = param.kind === 'down' ? 'mousedown' : param.kind === 'up' ? 'mouseup' : 'click';
+                    target.dispatchEvent(new MouseEvent(type, {
+                        clientX: Number(param.x || 0), clientY: Number(param.y || 0),
+                        button: Number(param.button || 0), bubbles: true, cancelable: true, view: window
+                    }));
+                    if (param.kind === 'down') target.dispatchEvent(new MouseEvent('mouseup', { 
+                        clientX: Number(param.x || 0), clientY: Number(param.y || 0),
+                        button: Number(param.button || 0), bubbles: true, cancelable: true, view: window }));
+                } else if (action.op === 'keyboard') {
+                    const target = param.elementId ? document.getElementById(param.elementId)
+                        : document.activeElement || document.body;
+                    if (!target) return;
+                    const ev = new KeyboardEvent('keydown', {
+                        key: String(param.key || ''), bubbles: true, cancelable: true, view: window
+                    });
+                    target.dispatchEvent(ev);
+                    if (param.text) {
+                        const input = target;
+                        if ('value' in input) {
+                            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                            setter.call(input, (input.value || '') + param.text);
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    }
+                } else if (action.op === 'evaluate') {
+                    window.__computerUseRequest(action.id || 'eval', { script: String(param.script || '') });
+                }
+                callJulia('computerUseResult', JSON.stringify({ id: action.id, ok: true, result: null })).catch(function () {});
+            } catch (e) {
+                callJulia('computerUseResult', JSON.stringify({ id: action.id, ok: false, error: String(e && e.message ? e.message : e) })).catch(function () {});
+            }
+        };
+
+        "Remove one session's UI after the backend closed it (and descendants)."
         "Remove one session's UI after the backend closed it (and descendants)."
         function removeSessionTab(id) {
             if (chatTabs[id]) {

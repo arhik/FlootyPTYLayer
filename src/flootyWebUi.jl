@@ -1160,7 +1160,7 @@ function workspaceInvoke(handler::Ref{Union{Nothing,Function}}, args...)
     try
         return Base.invokelatest(f, args...)
     catch err
-        @debug "flootyWebUi: workspace controller failed" exception = err
+        @info "flootyWebUi: workspace controller failed" exception = err
         return (success = false, error = sprint(showerror, err))
     end
 end
@@ -3568,6 +3568,24 @@ function registerTerminalBindings!(wv)
         return jsonOk()
     end
 
+    Webviews.bind(wv, "computerUseResult") do args
+        resp = try
+            payload = jsonArgs(args)
+            id = String(get(payload, :id, get(payload, "id", "")))
+            ch = pop!(COMPUTER_USE_PENDING, id, nothing)
+            if ch !== nothing
+                put!(ch, JSON.json(payload))
+            else
+                @debug "computerUseResult for unknown id" id
+            end
+            jsonOk()
+        catch err
+            @error "flootyWebUi: computerUseResult failed" exception = err
+            errorJson(sprint(showerror, err))
+        end
+        resp
+    end
+
     # Frontend debug channel: mirrors page-side diagnostics to stdout.
     Webviews.bind(wv, "flootyDebug") do args
         msg = args isa Tuple && !isempty(args) ? String(args[1]) : ""
@@ -4482,6 +4500,7 @@ function launchInputProbeUI(; width::Int = 700, height::Int = 420)
     Webviews.html!(wv, _INPUT_PROBE_HTML)
     terminalUiWebview[] = wv
     terminalUiRunning[] = true
+    get(ENV, "FLOOTY_COMPUTER_USE", "true") in ("1", "true") && startComputerUseServer!()
     @debug string("[probe] input-probe window launched")
     return wv
 end

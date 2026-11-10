@@ -64,6 +64,7 @@ activeTerminalUiWebview() = terminalUiWebview[]
 
 include("flootyPty.jl")
 include("controlState.jl")
+include("computerUse.jl")
 include("session.jl")
 include("shadowTerminal.jl")
 include("flootyWebUi.jl")
