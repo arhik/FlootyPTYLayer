@@ -52,7 +52,8 @@ export launchTerminalUI, runTerminalUI, stopTerminalUI,
     addWorkspaceHandler!,
     closeAllBrowserWindows!, browserWindowInfo, browserWindowOpen,
     addAgentModelHooks!, agentModelState, setSplitSession!, addWorkspaceHooks!,
-    gpuRendererReport, openTerminalWindow, runTerminalWindow
+    gpuRendererReport, openTerminalWindow, runTerminalWindow,
+    startComputerUseServer!, computerUsePort
 
 """
     activeTerminalUiWebview() -> Union{Webviews.Webview, Nothing}
