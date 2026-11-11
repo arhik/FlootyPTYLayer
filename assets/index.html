@@ -3586,12 +3586,16 @@
 
         window.__computerUseAct = function (action) {
             try {
-                if (!action || !action.op) return;
+                const id = (action && action.id) || '';
+                const reply = (ok, result, err) => {
+                    callJulia('computerUseResult', JSON.stringify({ id, ok, result, error: err || '' })).catch(function () {});
+                };
+                if (!action || !action.op) { reply(false, null, 'missing op'); return; }
                 const param = action.params || {};
                 if (action.op === 'mouse') {
                     const target = param.elementId ? document.getElementById(param.elementId)
                         : document.elementFromPoint(Number(param.x || 0), Number(param.y || 0));
-                    if (!target) return;
+                    if (!target) { reply(false, null, 'no element under point'); return; }
                     const type = param.kind === 'down' ? 'mousedown' : param.kind === 'up' ? 'mouseup' : 'click';
                     target.dispatchEvent(new MouseEvent(type, {
                         clientX: Number(param.x || 0), clientY: Number(param.y || 0),
@@ -3619,9 +3623,9 @@
                 } else if (action.op === 'evaluate') {
                     window.__computerUseRequest(action.id || 'eval', { script: String(param.script || '') });
                 }
-                callJulia('computerUseResult', JSON.stringify({ id: action.id, ok: true, result: null })).catch(function () {});
+                reply(true, null, '');
             } catch (e) {
-                callJulia('computerUseResult', JSON.stringify({ id: action.id, ok: false, error: String(e && e.message ? e.message : e) })).catch(function () {});
+                reply(false, null, e && e.message ? String(e.message) : String(e));
             }
         };
 
