@@ -3572,10 +3572,13 @@ function registerTerminalBindings!(wv)
         resp = try
             payload = jsonArgs(args)
             id = String(get(payload, :id, get(payload, "id", "")))
+            println("computer-use: bind entered id=", id, " payload_type=", typeof(payload)); flush(stdout)
             ch = pop!(COMPUTER_USE_PENDING, id, nothing)
+            println("computer-use: popped pending id=", id, " ch_type=", ch === nothing ? "nothing" : typeof(ch)); flush(stdout)
             if ch !== nothing
                 @info "computer-use: result arrived" id
                 put!(ch, payload)
+                println("computer-use: put! done"); flush(stdout)
             else
                 @info "computer-use: result for unknown id" id
             end
