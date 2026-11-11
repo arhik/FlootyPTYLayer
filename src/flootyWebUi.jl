@@ -3574,8 +3574,8 @@ function registerTerminalBindings!(wv)
             id = String(get(payload, :id, get(payload, "id", "")))
             ch = pop!(COMPUTER_USE_PENDING, id, nothing)
             if ch !== nothing
-                @info "computer-use: result arrived" id=String(get(payload, :id, get(payload, "id", "")))
-                put!(ch, JSON.json(payload))
+                @info "computer-use: result arrived" id
+                put!(ch, payload)
             else
                 @info "computer-use: result for unknown id" id
             end
