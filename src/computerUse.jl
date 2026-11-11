@@ -1,3 +1,4 @@
+using Base64
 # Remote computer-use server: external clients talk JSON over TCP.
 # Wire format (one object per line, both directions):
 #
@@ -141,7 +142,23 @@ function _computerUseActRemote(id::String, ch::Channel{Dict{String, Any}}, kind:
 end
 
 function _computerUseScreenshot(id::String, params::Dict{String, Any}, ch::Channel{Dict{String, Any}})
-    return Dict{String, Any}("id" => id, "ok" => false, "error" => "screenshot not implemented")
+    wv = activeTerminalUiWebview()
+    if wv === nothing
+        return Dict{String, Any}("id" => id, "ok" => false, "error" => "no active webview")
+    end
+    png = captureScreenshot(wv)
+    if png === nothing
+        return Dict{String, Any}("id" => id, "ok" => false, "error" => "CGWindowListCreateImage failed")
+    end
+    return Dict{String, Any}(
+        "id" => id,
+        "ok" => true,
+        "result" => Dict{String, Any}(
+            "encoding" => "base64",
+            "data" => base64encode(png),
+            "bytes" => length(png),
+        )
+    )
 end
 
 function _wait_reply_or_timeout(id::String, ch::Channel{Dict{String, Any}}, secs::Float64)
