@@ -101,13 +101,17 @@ function _computerUseEvaluateRemote(id::String, params::Dict{String, Any}, ch::C
         return Dict{String, Any}("id" => id, "ok" => false, "error" => "no active webview")
     end
     script = String(get(params, "script", ""))
-    safe = replace(script, "\\" => "\\\\", "\"" => "\\\"", "\n" => "\\n", "\r" => "\\r", "\t" => "\\t",
-                   "<" => "\\u003c", ">" => "\\u003e", "&" => "\\u0026",
-                   "\u2028" => "\\u2028", "\u2029" => "\\u2029")
-    Webviews.eval!(wv,
-        "window.__computerUseEvaluate($(JSON.json(Dict(
-            "id" => id,
-            "script" => script))));")
+    payload = JSON.json(Dict("id" => id, "script" => script))
+    js = "(function () { var fn = window.__computerUseEvaluate; if (typeof fn !== 'function') { try { callJulia('computerUseResult', JSON.stringify({id: '" * id * "', ok: false, error: 'computerUseEvaluate not installed'})) } catch (_) {} return; } fn(" * payload * "); })();"
+    Webviews.dispatch(wv) do
+        try
+            Webviews.eval!(wv, js)
+        catch err
+            try delete!(COMPUTER_USE_PENDING, id) catch; end
+            println("computer-use: wkwebview eval! failed: ", sprint(showerror, err)); flush(stdout)
+            put!(ch, Dict{String, Any}("id" => id, "ok" => false, "error" => sprint(showerror, err)))
+        end
+    end
     return _wait_reply_or_timeout(id, ch, 8.0)
 end
 
