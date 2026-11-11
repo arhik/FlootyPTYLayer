@@ -76,7 +76,15 @@ function _computerUseClientLoop(sock)
         channel = Channel{Dict{String, Any}}(1)
         COMPUTER_USE_PENDING[id] = channel
         try
-            reply = _dispatchComputerUse(id, op, params, channel)
+            if lowercase(op) == "evaluate"
+                reply = _computerUseEvaluateRemote(id, params, channel)
+            elseif lowercase(op) == "mouse" || lowercase(op) == "keyboard"
+                reply = _computerUseActRemote(id, channel, lowercase(op), params)
+            elseif lowercase(op) == "screenshot"
+                reply = _computerUseScreenshot(id, params, channel)
+            else
+                reply = Dict{String, Any}("id" => id, "ok" => false, "error" => "unknown op: $(op)")
+            end
             println(sock, JSON.json(reply))
         catch err
             @error "computer-use: dispatch threw" id exception = err
