@@ -86,9 +86,11 @@ function _computerUseClientLoop(sock)
                 reply = Dict{String, Any}("id" => id, "ok" => false, "error" => "unknown op: $(op)")
             end
             println(sock, JSON.json(reply))
+            try flush(sock) catch; end
         catch err
             @error "computer-use: dispatch threw" id exception = err
             println(sock, JSON.json(Dict("id" => id, "ok" => false, "error" => sprint(showerror, err))))
+            try flush(sock) catch; end
         finally
             if haskey(COMPUTER_USE_PENDING, id)
                 pop!(COMPUTER_USE_PENDING, id)
