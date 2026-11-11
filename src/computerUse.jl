@@ -78,9 +78,9 @@ function _computerUseClientLoop(sock)
         ch = Channel{String}(1)
         COMPUTER_USE_PENDING[id] = ch
         try
-            println("computer-use: op=", op, ", params type=", typeof(params))
+            println("computer-use: op=", op, ", params type=", typeof(params)); flush(stdout)
             if op == "evaluate"
-                println("computer-use: branch=evaluate")
+                println("computer-use: branch=evaluate"); flush(stdout)
                 _computerUseEvaluateRemote(id, ch, String(get(params, :script, "")))
             elseif op == "mouse" || op == "keyboard"
                 _computerUseActRemote(id, ch, msg)
