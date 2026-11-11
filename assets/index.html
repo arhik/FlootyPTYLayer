@@ -3585,9 +3585,12 @@
         };
 
         window.__computerUseAct = function (action) {
+            const id = (action && action.id) || '';
+            const trace = m => { try { window.flootyFileDrop && window.flootyFileDrop('computer-use-act: ' + m); } catch (_) {} };
+            trace('act received op=' + (action && action.op) + ' id=' + id);
             try {
-                const id = (action && action.id) || '';
                 const reply = (ok, result, err) => {
+                    trace('reply ok=' + ok + (err ? ' err=' + err : ''));
                     callJulia('computerUseResult', JSON.stringify({ id, ok, result, error: err || '' })).catch(function () {});
                 };
                 if (!action || !action.op) { reply(false, null, 'missing op'); return; }
