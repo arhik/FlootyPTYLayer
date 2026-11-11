@@ -97,15 +97,23 @@ function _computerUseClientLoop(sock)
 end
 
 function _computerUseEvaluateRemote(id::String, ch::Channel{String}, script::String)
+    println("computer-use: dispatch about to happen (id=", id, " script=", script, ")")
     wv = activeTerminalUiWebview()
-    wv === nothing && return _write_reply_now!(ch, Dict("id" => id, "ok" => false, "error" => "no active webview"))
+    if wv === nothing
+        println("computer-use: NO WEBVIEW")
+        return _write_reply_now!(ch, Dict("id" => id, "ok" => false, "error" => "no active webview"))
+    end
+    println("computer-use: dispatch entered, wv type=", typeof(wv))
     try
         @info "computer-use: calling page" id script=String(script)
+        println("computer-use: calling eval!")
         Webviews.eval!(wv,
             "window.__computerUseRequest(\"" * escapeJsString(id) * "\", " *
             JSON.json("{\"id\":\"" * id * "\",\"script\":" * JSON.json(script) * "}") *
             ");")
+        println("computer-use: eval! returned")
     catch err
+        println("computer-use: eval threw: ", sprint(showerror, err))
         _write_reply!(ch, Dict("id" => id, "ok" => false, "error" => sprint(showerror, err)))
     end
 end
