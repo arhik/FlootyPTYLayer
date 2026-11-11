@@ -1,175 +1,226 @@
-# Remote computer-use server: external clients (FlootyComputerUse) speak a
-# line-protocol over TCP. We accept newline-delimited JSON objects:
-#   {"id":"u1","op":"evaluate"|"mouse"|"keyboard"|"screenshot","params":{...}}
-# We reply on the same socket line with either "ok":true,"result":<json-string>
-# or "ok":false,"error":<string>.
+# Remote computer-use server: external clients talk JSON over TCP.
+# Requests and responses are plain structs serialised via StructTypes, not
+# ad-hoc JSON dicts — that removes the Symbol/String ambiguity that bit us
+# repeatedly, and gives every operation a typed, compile-time shape.
 #
-# The page is the control plane for in-page actions (JS evaluation); native
-# actions (screenshot via CoreGraphics) are handled here. OS-level input uses
-# CGEventPost and may require Accessibility permission.
+# Wire format (one object per line, both directions):
+#
+#   Client -> App:
+#     {"op":"evaluate"|"mouse"|"keyboard", "id":"<uuid>", "params":{...}}
+#   App -> Client:
+#     {"id":"<uuid>", "ok": true|false, "result":<json>|null, "error":""|"<message>"}
+#
+# The wkwebview page pushes its replies back through the single bound Julia
+# function `computerUseResult`, which looks up the pending channel by id and
+# returns the structured response to the socket.
 
 using Sockets
+using JSON3
+using StructTypes
 
+"""Untyped JSON passed to wkwebview."""
+const JSONValue = Union{Nothing, Bool, Number, AbstractString, Dict{String, Any}, Vector{Any}}
+
+abstract type AbstractComputerUseMessage end
+
+mutable struct ComputerUseRequest <: AbstractComputerUseMessage
+    type::String
+    id::String
+    op::String
+    params::Dict{String, Any}
+    ComputerUseRequest() = new()
+    ComputerUseRequest(type, id, op, params) = new(type, id, op, params)
+end
+StructTypes.StructType(::Type{ComputerUseRequest}) = StructTypes.Mutable()
+
+mutable struct ComputerUseResponse <: AbstractComputerUseMessage
+    type::String
+    id::String
+    ok::Bool
+    result::Any
+    error::String
+    ComputerUseResponse() = new()
+    ComputerUseResponse(type, id, ok, result, error) = new(type, id, ok, result, error)
+end
+StructTypes.StructType(::Type{ComputerUseResponse}) = StructTypes.Mutable()
+
+# --- module state -----------------------------------------------------------------
 const COMPUTER_USE_PORT = Ref{Int}(0)
-const COMPUTER_USE_PENDING = Dict{String, Channel{Any}}()
-const COMPUTER_USE_LOCK = ReentrantLock()
+const COMPUTER_USE_PENDING = Dict{String, Channel{ComputerUseResponse}}()
+const COMPUTER_USE_THREAD_COUNT = Ref{Int}(Threads.nthreads())
 
-"""Start the computer-use TCP server on loopback. Returns the port."""
-function startComputerUseServer!(; port::Int=0, host::String="127.0.0.1")
-    lock(COMPUTER_USE_LOCK) do
-        COMPUTER_USE_PORT[] != 0 && return COMPUTER_USE_PORT[]
-        server = Sockets.listen(UInt16(port))
-        _host, port = Sockets.getsockname(server)
-        port = Int(port)
-        COMPUTER_USE_PORT[] = port
-        @info "computer-use: listening" host port
-        ENV["FLOOTY_COMPUTER_USE_PORT"] = string(port)
-        open(joinpath(tempdir(), "flooty-computer-use.port"), "w") do io
-            write(io, string(port))
-        end
-        Threads.@spawn begin
-            try
-                _computerUseAcceptLoop(server)
-            catch err
-                @debug "computer-use accept loop ended" exception = err
-            end
-        end
-        port
+"""Start the computer-use TCP server on loopback; returns the bound port."""
+function startComputerUseServer!(; port::Int=0, host::AbstractString="127.0.0.1")
+    if COMPUTER_USE_PORT[] != 0
+        return COMPUTER_USE_PORT[]
     end
+    server = Sockets.listen(Sockets.InetAddr(parse(IPAddress, host), UInt16(port)))
+    real_port = Int(Sockets.getsockname(server)[2])
+    COMPUTER_USE_PORT[] = real_port
+    ENV["FLOOTY_COMPUTER_USE_PORT"] = string(real_port)
+    open(joinpath(tempdir(), "flooty-computer-use.port"), "w") do io
+        write(io, string(real_port))
+    end
+    Threads.@spawn _computerUseAcceptLoop(server)
+    @info "computer-use: listening" host port = real_port
+    return real_port
 end
 
 computerUsePort() = COMPUTER_USE_PORT[]
 
+# --- accept/read loops ------------------------------------------------------------
 function _computerUseAcceptLoop(server)
     while true
         sock = try Sockets.accept(server) catch; break end
         try
-            peer = Sockets.getsockname(sock)
-            @info "[ui-drop] computer-use accepted connection" peer
-        catch
+            peer_host = gethostname(sock)
+            peer_ip = string(peer_host)
+            @info "computer-use: accepted client" peer = peer_ip
+        catch err
+            @warn "computer-use: could not read peer" exception = err
         end
-        Threads.@spawn begin
-            try
-                _computerUseClientLoop(sock)
-            catch err
-                @debug "computer-use client loop ended" exception = err
-            finally
-                try close(sock) catch; end
-            end
+        Threads.@spawn try
+            _computerUseClientLoop(sock)
+        catch err
+            @error "computer-use: client loop ended" exception = err
+        finally
+            try close(sock) catch; end
         end
     end
 end
 
 function _computerUseClientLoop(sock)
     while isopen(sock)
-        line = try readline(sock) catch; break end
-        @info "computer-use: received line" line
-        isempty(strip(line)) && continue
-        msg = try
-            JSON.parse(line)
+        line = try
+            readline(sock)
         catch err
-            println(sock, JSON.json(Dict("id" => "", "ok" => false, "error" => string("parse: ", sprint(showerror, err)))))
-            continue
+            @error "computer-use: readline failed" exception = err
+            break
         end
-        id = String(get(msg, "id", ""))
-        op = String(get(msg, "op", ""))
-        params = get(msg, "params", Dict{String, Any}())
-        @info "computer-use: parsed request" id op
-        ch = Channel{String}(1)
-        COMPUTER_USE_PENDING[id] = ch
+        stripped = strip(line)
+        isempty(stripped) && continue
+        @info "computer-use: line received" line = stripped
+        request = try
+            JSON3.read(stripped, ComputerUseRequest)
+        catch err
+            @error "computer-use: Could not parse request" line exception = err
+            break
+        end
+        @info "computer-use: parsed request" id = request.id op = request.op
+        channel = Channel{ComputerUseResponse}(1)
+        COMPUTER_USE_PENDING[request.id] = channel
         try
-            println("computer-use: op=", op, ", params type=", typeof(params)); flush(stdout)
-            if op == "evaluate"
-                println("computer-use: branch=evaluate"); flush(stdout)
-                _computerUseEvaluateRemote(id, ch, String(get(params, :script, "")))
-            elseif op == "mouse" || op == "keyboard"
-                _computerUseActRemote(id, ch, msg)
-            elseif op == "screenshot"
-                _computerUseScreenshot(id, ch)
-            else
-                delete!(COMPUTER_USE_PENDING, id)
-                _write_reply!(ch, Dict("id" => id, "ok" => false, "error" => string("unknown op: ", op)))
-            end
+            reply = dispatch!(request, channel)
+            println(sock, JSON3.write(reply))
         catch err
-            try delete!(COMPUTER_USE_PENDING, id) catch; end
-            _write_reply(sock, Dict("id" => id, "ok" => false, "error" => sprint(showerror, err)))
+            @error "computer-use: dispatch! threw" id = request.id exception = err
+            println(sock, JSON3.write(ComputerUseResponse("response", request.id, false, nothing,
+                sprint(showerror, err))))
+        finally
+            pop!(COMPUTER_USE_PENDING, request.id)
         end
-        wait_for_and_write_reply!(sock, id, ch)
     end
 end
 
-function _computerUseEvaluateRemote(id::String, ch::Channel{String}, script::String)
-    println("computer-use: dispatch about to happen (id=", id, " script=", script, ")")
+# --- dispatch --------------------------------------------------------------------
+
+const _computerUseOps = (
+    evaluate = (id, params, ch) -> _computerUseEvaluateRemote(id, ch, params),
+    mouse    = (id, params, ch) -> _computerUseActRemote(id, ch, "mouse", params),
+    keyboard = (id, params, ch) -> _computerUseActRemote(id, ch, "keyboard", params),
+    screenshot = (id, params, ch) -> _computerUseScreenshot(id, ch),
+)
+
+function dispatch!(request::ComputerUseRequest, channel::Channel{ComputerUseResponse})
+    op = lowercase(String(request.op))
+    if !hasproperty(_computerUseOps, Symbol(op))
+        return ComputerUseResponse("response", request.id, false, nothing,
+                                   "unknown op: $(op)")
+    end
+    getfield(_computerUseOps, Symbol(op))(request.id, request.params, channel)
+end
+
+# --- wkwebview round-trips --------------------------------------------------------
+
+function _scriptForAction(action::String, id::String, request::ComputerUseRequest)
+    # computer-use actions are expressed as JS events into the page; the JS side
+    # always ends by calling window.callJulia('computerUseResult', {id, ok, result})
+    # which lands in computerUseReply() below.
+    "window.__computerUseAct($(JSON3.write(Dict(
+        "id" => id,
+        "op" => action,
+        "params" => request.params))));"
+end
+
+function _computerUseEvaluateRemote(id::String, ch::Channel{ComputerUseResponse}, params::Dict{String, Any})
     wv = activeTerminalUiWebview()
     if wv === nothing
-        println("computer-use: NO WEBVIEW")
-        return _write_reply_now!(ch, Dict("id" => id, "ok" => false, "error" => "no active webview"))
+        return ComputerUseResponse("response", id, false, nothing, "no active webview")
     end
-    println("computer-use: dispatch entered, wv type=", typeof(wv))
+    script = String(get(params, "script", ""))
+    js = "window.__computerUseEvaluate($(JSON3.write(Dict(
+        "id" => id,
+        "script" => script))));"
+    dispatchWebView(wv, js)
+    _wait_reply_or_timeout(id, ch, 8.0)
+end
+
+function _computerUseActRemote(id::String, ch::Channel{ComputerUseResponse}, kind::String, params::Dict{String, Any})
+    wv = activeTerminalUiWebview()
+    if wv === nothing
+        return ComputerUseResponse("response", id, false, nothing, "no active webview")
+    end
+    dispatchWebView(wv, _scriptForAction(kind, id, ComputerUseRequest("mute", id, kind, params)))
+    _wait_reply_or_timeout(id, ch, 8.0)
+end
+
+function _computerUseScreenshot(id::String, ch::Channel{ComputerUseResponse})
+    wv = activeTerminalUiWebview()
+    if wv === nothing
+        return ComputerUseResponse("response", id, false, nothing, "no active webview")
+    end
+    dispatchWebView(wv,
+        "window.__computerUseCapture($(JSON3.write(Dict("id" => id))));")
+    _wait_reply_or_timeout(id, ch, 8.0)
+end
+
+function _wait_reply_or_timeout(id::String, ch::Channel{ComputerUseResponse}, secs::Float64)
     try
-        @info "computer-use: calling page" id script=String(script)
-        println("computer-use: calling eval!")
-        Webviews.eval!(wv,
-            "window.__computerUseRequest(\"" * escapeJsString(id) * "\", " *
-            JSON.json("{\"id\":\"" * id * "\",\"script\":" * JSON.json(script) * "}") *
-            ");")
-        println("computer-use: eval! returned")
+        result = timedwait(() -> isready(ch), secs)
+        if result == :timed_out
+            n = Base.throwto(current_task(), InterruptException()) # noop to keep intent explicit
+            return ComputerUseResponse("response", id, false, nothing,
+                string("timed out after ", secs, "s waiting for wkwebview callback"))
+        end
+        return take!(ch)
     catch err
-        println("computer-use: eval threw: ", sprint(showerror, err))
-        _write_reply!(ch, Dict("id" => id, "ok" => false, "error" => sprint(showerror, err)))
+        return ComputerUseResponse("response", id, false, nothing, sprint(showerror, err))
     end
 end
 
-function _computerUseActRemote(id::String, ch::Channel{String}, msg)
-    wv = activeTerminalUiWebview()
-    wv === nothing && return _write_reply_now!(ch, Dict("id" => id, "ok" => false, "error" => "no active webview"))
+function dispatchWebView(wv, js::AbstractString)
+    # Webviews.eval! is thread-safe on macOS (wkwebview runs JS on main).
     Webviews.dispatch(wv) do
         try
-            Webviews.eval!(wv,
-                "window.__computerUseAct(" *
-                JSON.json(msg) *
-                ");")
+            Webviews.eval!(wv, js)
         catch err
-            _write_reply!(ch, Dict("id" => id, "ok" => false, "error" => sprint(showerror, err)))
+            @error "computer-use: eval! failed" exception = err
         end
     end
 end
 
-function _write_reply_now!(ch::Channel{String}, dict)
-    @async try put!(ch, JSON.json(dict)) catch; end
-    return nothing
-end
-
-function _write_reply!(ch::Channel{String}, dict)
-    put!(ch, JSON.json(dict))
-end
-
-function _write_reply(sock, dict)
-    println(sock, JSON.json(dict))
-end
-
-function wait_for_and_write_reply!(sock, id::String, ch::Channel{String}; timeout::Float64=5.0)
-    deadline = time() + timeout
-    while true
-        if isready(ch)
-            reply = take!(ch)
-            println(sock, reply)
-            return
-        end
-        if time() >= deadline
-            try delete!(COMPUTER_USE_PENDING, id) catch; end
-            _write_reply(sock, Dict("id" => id, "ok" => false, "error" => "timeout waiting for reply"))
-            return
-        end
-        sleep(0.005)
+"""Julia callback invoked by wkwebview when JS produces its result."""
+function computerUseReply(id::AbstractString, ok::Bool, result_or_error::Any)
+    ch = get(COMPUTER_USE_PENDING, String(id), nothing)
+    if ch === nothing
+        @warn "computer-use: Reply for unknown id" id
+        return true
     end
-end
-
-# Write-through: the page reports back via the bound Julia callback.
-function computerUseReply(id::AbstractString, ok::Bool, payload::Any)
-    ch = pop!(COMPUTER_USE_PENDING, id, nothing)
-    ch !== nothing && put!(ch, JSON.json(Dict("id" => String(id), "ok" => ok, "result" => payload)))
+    if ok
+        put!(ch, ComputerUseResponse("response", String(id), true, result_or_error, ""))
+    else
+        put!(ch, ComputerUseResponse("response", String(id), false, nothing,
+            String(result_or_error)))
+    end
     return true
 end
-
-include("computerUseCapture.jl")
