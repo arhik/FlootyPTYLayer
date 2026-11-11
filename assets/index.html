@@ -3570,6 +3570,20 @@
         };
 
         "Computer-use: synthesize DOM mouse/keyboard events into the live page."
+        "Computer-use: evaluate a JS expression and report result via callJulia(computerUseResult)."
+        window.__computerUseEvaluate = async function (req) {
+            const id = (req && req.id) || '';
+            try {
+                const script = String(req && req.script || '');
+                const value = await (0, eval)(script);
+                callJulia('computerUseResult', JSON.stringify({ id: id, ok: true, result: value })).catch(function (e) {
+                    try { window.flootyFileDrop && window.flootyFileDrop('computerUseResult failed: ' + e); } catch (_) {}
+                });
+            } catch (e) {
+                callJulia('computerUseResult', JSON.stringify({ id: id, ok: false, error: e && e.message ? String(e.message) : String(e) })).catch(function () {});
+            }
+        };
+
         window.__computerUseAct = function (action) {
             try {
                 if (!action || !action.op) return;
