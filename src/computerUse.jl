@@ -22,7 +22,7 @@ function startComputerUseServer!(; port::Int=0, host::AbstractString="127.0.0.1"
     if COMPUTER_USE_PORT[] != 0
         return COMPUTER_USE_PORT[]
     end
-    server = Sockets.listen(Sockets.InetAddr(parse(IPAddress, host), UInt16(port)))
+    server = Sockets.listen(UInt16(port)) # loopback only for now
     real_port = Int(Sockets.getsockname(server)[2])
     COMPUTER_USE_PORT[] = real_port
     ENV["FLOOTY_COMPUTER_USE_PORT"] = string(real_port)
