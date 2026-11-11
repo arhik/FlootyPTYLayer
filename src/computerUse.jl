@@ -122,11 +122,19 @@ function _computerUseActRemote(id::String, ch::Channel{Dict{String, Any}}, kind:
     if wv === nothing
         return Dict{String, Any}("id" => id, "ok" => false, "error" => "no active webview")
     end
-    Webviews.eval!(wv,
-        "window.__computerUseAct($(JSON.json(Dict(
-            "id" => id,
-            "op" => kind,
-            "params" => params))));")
+    Webviews.dispatch(wv) do
+        try
+            Webviews.eval!(wv,
+                "window.__computerUseAct($(JSON.json(Dict(
+                    "id" => id,
+                    "op" => kind,
+                    "params" => params))));")
+        catch err
+            try delete!(COMPUTER_USE_PENDING, id) catch; end
+            println("computer-use: wkwebview eval! failed: ", sprint(showerror, err)); flush(stdout)
+            put!(ch, Dict{String, Any}("id" => id, "ok" => false, "error" => sprint(showerror, err)))
+        end
+    end
     return _wait_reply_or_timeout(id, ch, 8.0)
 end
 
