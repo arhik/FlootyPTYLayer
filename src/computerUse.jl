@@ -90,7 +90,9 @@ function _computerUseClientLoop(sock)
             @error "computer-use: dispatch threw" id exception = err
             println(sock, JSON.json(Dict("id" => id, "ok" => false, "error" => sprint(showerror, err))))
         finally
-            pop!(COMPUTER_USE_PENDING, id)
+            if haskey(COMPUTER_USE_PENDING, id)
+                pop!(COMPUTER_USE_PENDING, id)
+            end
         end
     end
 end
