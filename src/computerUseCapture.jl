@@ -77,9 +77,16 @@ function _cgimage_to_png(image::Ptr{Cvoid})
         return nothing
     end
 
-    len = ccall(:objc_msgSend, Culong, (Ptr{Cvoid}, Ptr{Cvoid}), data, _sel("length"))
-    ptr = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}), data, _sel("bytes"))
-    return unsafe_load(Ptr{UInt8}(ptr), len) |> copy
+    nsString = ccall(:objc_msgSend, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+                     data, _sel("base64EncodedStringWithOptions:"), Csize_t(0))
+    if nsString == C_NULL
+        return nothing
+    end
+    utf8 = ccall(:objc_msgSend, Ptr{Cchar}, (Ptr{Cvoid}, Ptr{Cvoid}), nsString, _sel("UTF8String"))
+    if utf8 == C_NULL
+        return nothing
+    end
+    return unsafe_string(utf8)
 end
 
 function captureScreenshot(wv)

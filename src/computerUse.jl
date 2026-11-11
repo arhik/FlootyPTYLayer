@@ -155,8 +155,8 @@ function _computerUseScreenshot(id::String, params::Dict{String, Any}, ch::Chann
         "ok" => true,
         "result" => Dict{String, Any}(
             "encoding" => "base64",
-            "data" => base64encode(png),
-            "bytes" => length(png),
+            "data" => png,
+            "bytes" => sizeof(png),
         )
     )
 end
